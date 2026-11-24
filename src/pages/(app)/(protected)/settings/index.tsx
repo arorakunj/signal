@@ -1,57 +1,48 @@
 import { useState, type FormEvent } from 'react'
 import { signOut, useAsyncResource } from 'deepspace'
 import { ChevronRight, SlidersHorizontal, UserRound } from 'lucide-react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
   Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader,
   DialogTitle, Input, Label,
 } from '@/components/ui'
+import AppPage from '@/components/AppPage'
 import { deleteSignalAccount, getProfileDetails } from '@/lib/profile'
 
 export default function Settings() {
-  const { state } = useLocation()
-  const notice: unknown = state?.notice
   const profile = useAsyncResource(getProfileDetails, [])
   const displayName = profile.data?.displayName
   const contactEmail = profile.data?.contactEmail
 
   return (
-    <section className="min-h-full bg-background px-5 py-10 text-foreground sm:px-8 sm:py-16">
-      <div className="mx-auto max-w-2xl">
-        <h1 className="font-newsreader text-5xl tracking-tight">Settings</h1>
-        <p className="mt-2 text-muted-foreground">Manage your Signal account and what shows up in your feed.</p>
-        {typeof notice === 'string' && (
-          <p role="status" className="mt-5 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">{notice}</p>
-        )}
-
-        <div className="mt-7 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-          <Link to="/settings/interests" className="flex items-center gap-4 p-5 hover:bg-accent/50 sm:p-6">
-            <SlidersHorizontal size={20} className="shrink-0 text-primary" aria-hidden />
-            <div className="flex-1">
-              <h2 className="font-semibold">Your interests</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Edit your categories and specific interests.</p>
-            </div>
-            <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />
-          </Link>
-          <Link to="/settings/profile" className="flex items-center gap-4 p-5 hover:bg-accent/50 sm:p-6">
-            <UserRound size={20} className="shrink-0 text-primary" aria-hidden />
-            <div className="min-w-0 flex-1">
-              <h2 className="font-semibold">Profile</h2>
-              <p className="mt-1 truncate text-sm text-muted-foreground">
-                {displayName ? [displayName, contactEmail].filter(Boolean).join(' · ') : 'Manage your display name and contact email.'}
-              </p>
-            </div>
-            <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />
-          </Link>
-        </div>
-
-        <section className="mt-9 rounded-2xl border border-border bg-card p-5 sm:p-6" aria-labelledby="account-heading">
-          <h2 id="account-heading" className="font-newsreader text-2xl tracking-tight">Account</h2>
-          <p className="mb-4 mt-1.5 text-sm text-muted-foreground">Permanently delete your Signal profile, saved interests, picks, and podcast audio.</p>
-          <DeleteAccount />
-        </section>
+    <AppPage title="Settings" description="Manage your Signal account and what shows up in your feed.">
+      <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+        <Link to="/settings/interests" className="flex items-center gap-4 p-5 hover:bg-accent/50 sm:p-6">
+          <SlidersHorizontal size={20} className="shrink-0 text-primary" aria-hidden />
+          <div className="flex-1">
+            <h2 className="font-semibold">Your interests</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Edit your categories and specific interests.</p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />
+        </Link>
+        <Link to="/settings/profile" className="flex items-center gap-4 p-5 hover:bg-accent/50 sm:p-6">
+          <UserRound size={20} className="shrink-0 text-primary" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <h2 className="font-semibold">Profile</h2>
+            <p className="mt-1 truncate text-sm text-muted-foreground">
+              {displayName ? [displayName, contactEmail].filter(Boolean).join(' · ') : 'Manage your display name and contact email.'}
+            </p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden />
+        </Link>
       </div>
-    </section>
+
+      <section className="mt-9 rounded-2xl border border-border bg-card p-5 sm:p-6" aria-labelledby="account-heading">
+        <h2 id="account-heading" className="font-newsreader text-2xl tracking-tight">Account</h2>
+        <p className="mb-4 mt-1.5 text-sm text-muted-foreground">Permanently delete your Signal profile, saved interests, picks, and podcast audio.</p>
+        <DeleteAccount />
+      </section>
+    </AppPage>
   )
 }
 

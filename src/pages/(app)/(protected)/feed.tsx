@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import AppPage from '@/components/AppPage'
 import BriefingPanel from '@/components/BriefingPanel'
 import InterestOnboarding from '@/components/InterestOnboarding'
 import { profileAction } from '@/lib/profile'
@@ -47,30 +48,33 @@ export default function Feed() {
   }
 
   return (
-    <section className="min-h-full bg-background px-6 py-16 text-foreground">
-      <div className="mx-auto max-w-5xl">
-        <h1 className="font-newsreader text-5xl tracking-tight">Your feed</h1>
-        {error ? (
-          <div className="mt-6">
-            <p role="alert" className="text-destructive">{error}</p>
-            <button className="mt-3 text-primary underline" onClick={() => { setError(''); setAttempt(attempt + 1) }}>Try again</button>
-          </div>
-        ) : interests === null ? <p role="status" className="mt-6 text-muted-foreground">Loading your interests…</p>
-          : (
-            <>
-              <ul className="mt-6 flex flex-wrap gap-2" aria-label="Your interests">
-                {interests.map(({ category, focus }) => (
-                  <li key={category} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border border-border bg-card px-3 py-2 text-sm">
-                    <span className="font-semibold">{category}</span>
-                    {focus.map((topic) => <span key={topic} className="text-muted-foreground">{topic}</span>)}
-                  </li>
-                ))}
-              </ul>
-              <BriefingPanel kind="report" />
-              <Link to="/settings" className="mt-4 inline-block text-sm text-primary underline">Manage interests</Link>
-            </>
-          )}
-      </div>
-    </section>
+    <AppPage title="Your feed">
+      {error ? (
+        <div className="mt-6">
+          <p role="alert" className="text-destructive">{error}</p>
+          <button className="mt-3 text-primary underline" onClick={() => { setError(''); setAttempt(attempt + 1) }}>Try again</button>
+        </div>
+      ) : interests === null ? <p role="status" className="mt-6 text-muted-foreground">Loading your interests…</p>
+        : (
+          <>
+            <ul className="flex flex-wrap gap-2" aria-label="Your interests">
+              {interests.map(({ category, focus }) => (
+                <li key={category} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+                  <span className="font-semibold">{category}</span>
+                  {focus.length > 0 && (
+                    <span className="text-muted-foreground">
+                      {focus.map((topic, index) => (
+                        <span key={topic}>{index > 0 ? ', ' : ''}<span>{topic}</span></span>
+                      ))}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <BriefingPanel kind="report" />
+            <Link to="/settings/interests" className="mt-4 inline-block text-sm text-primary underline">Manage interests</Link>
+          </>
+        )}
+    </AppPage>
   )
 }

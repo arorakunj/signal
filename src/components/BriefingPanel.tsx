@@ -74,7 +74,7 @@ export default function BriefingPanel({ kind }: { kind: GenerationKind }) {
   const isReport = kind === 'report'
   const isLegacyReport = report?.sections.some((section) => !section.category)
   return (
-    <section className="mt-10 border-t border-border pt-7" aria-label="Your briefing">
+    <section className={isReport ? "mt-8" : undefined} aria-label="Your briefing">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {isReport && <h2 className="font-newsreader text-3xl tracking-tight sm:text-4xl">Top picks for you today</h2>}
         <button type="button" disabled={locked || !briefing || (!isReport && (!report || isLegacyReport))} onClick={() => void generate(kind)}

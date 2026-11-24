@@ -25,8 +25,12 @@ export async function getProfileDetails() {
   return profileDetailsResponseSchema.parse(await requestAccountAction('getProfileDetails', {}))
 }
 
+export const PROFILE_UPDATED = 'signal:profile-updated'
+
 export async function saveProfileDetails(details: ProfileDetails) {
-  return profileDetailsResponseSchema.parse(await requestAccountAction('saveProfileDetails', details))
+  const saved = profileDetailsResponseSchema.parse(await requestAccountAction('saveProfileDetails', details))
+  window.dispatchEvent(new Event(PROFILE_UPDATED))
+  return saved
 }
 
 export async function deleteSignalAccount(confirmation: string) {

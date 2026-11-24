@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useAsyncResource, useAuthProfileReady } from 'deepspace'
 import { useNavigate } from 'react-router-dom'
 import SettingsEditor from '@/components/SettingsEditor'
-import { Button, Input, Label } from '@/components/ui'
+import { Button, Input, Label, useToast } from '@/components/ui'
 import { getProfileDetails, saveProfileDetails } from '@/lib/profile'
 import type { ProfileDetails } from '@/lib/profile-details'
 
@@ -30,6 +30,7 @@ export default function ProfileSettings() {
 
 function ProfileForm({ initial, signInEmail }: { initial: ProfileDetails; signInEmail?: string }) {
   const navigate = useNavigate()
+  const { success } = useToast()
   const [name, setName] = useState(initial.displayName)
   const [email, setEmail] = useState(initial.contactEmail)
   const [busy, setBusy] = useState(false)
@@ -41,7 +42,8 @@ function ProfileForm({ initial, signInEmail }: { initial: ProfileDetails; signIn
     setBusy(true)
     try {
       await saveProfileDetails({ displayName: name, contactEmail: email })
-      navigate('/settings', { replace: true, state: { notice: 'Profile saved.' } })
+      success('Profile saved.')
+      navigate('/settings', { replace: true })
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not save your profile.')
     } finally {

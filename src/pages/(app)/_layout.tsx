@@ -15,10 +15,11 @@
  * their own layout without inheriting it.
  */
 
-import { Suspense, type ReactNode } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Suspense, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 import { DeepSpaceAuthProvider, useAuthStatus } from 'deepspace'
 import { RecordProvider, RecordScope, AgentTools } from 'deepspace'
+import AppSidebar from '../../components/AppSidebar'
 import Navigation from '../../components/Navigation'
 import { useToast } from '@/components/ui'
 import { APP_NAME, SCOPE_ID } from '../../constants'
@@ -31,16 +32,30 @@ export default function AppLayout() {
           when <Seo> unmounts, so every route without <Seo> sets its own. */}
       <title>{APP_NAME}</title>
       <AuthBoot>
-        <div className="flex h-screen flex-col bg-background overflow-hidden">
-          <Navigation />
-          <main className="flex-1 overflow-y-auto min-h-0">
-            <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground">Loading...</div>}>
-              <Outlet />
-            </Suspense>
-          </main>
-        </div>
+        <AppShell />
       </AuthBoot>
     </DeepSpaceAuthProvider>
+  )
+}
+
+function AppShell() {
+  const { isSignedIn } = useAuthStatus()
+  const { pathname } = useLocation()
+  const content = useRef<HTMLElement>(null)
+
+  useLayoutEffect(() => {
+    content.current?.scrollTo({ top: 0, behavior: 'instant' })
+  }, [pathname])
+
+  return (
+    <div className={`flex h-dvh min-h-0 flex-col overflow-hidden bg-background ${isSignedIn ? 'md:flex-row' : ''}`}>
+      {isSignedIn ? <AppSidebar /> : <Navigation />}
+      <main ref={content} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+        <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground">Loading…</div>}>
+          <Outlet />
+        </Suspense>
+      </main>
+    </div>
   )
 }
 

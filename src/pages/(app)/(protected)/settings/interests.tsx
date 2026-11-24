@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAsyncResource } from 'deepspace'
 import { useNavigate } from 'react-router-dom'
+import { useToast } from '@/components/ui'
 import InterestPicker from '@/components/InterestPicker'
 import SettingsEditor from '@/components/SettingsEditor'
 import { profileAction } from '@/lib/profile'
@@ -8,6 +9,7 @@ import type { Interest } from '@/lib/interests'
 
 export default function InterestSettings() {
   const navigate = useNavigate()
+  const { success } = useToast()
   const interests = useAsyncResource(() => profileAction('getInterests'), [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -17,7 +19,8 @@ export default function InterestSettings() {
     setError('')
     try {
       await profileAction('saveInterests', next)
-      navigate('/settings', { replace: true, state: { notice: 'Interests saved.' } })
+      success('Interests saved.')
+      navigate('/settings', { replace: true })
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not save your interests.')
     } finally {

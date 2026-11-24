@@ -151,6 +151,9 @@ test('profiles persist after refresh and remain isolated between accounts', asyn
     await page.getByRole('button', { name: 'Save interests' }).click()
     await expect(page).toHaveURL(/\/settings$/)
     await expect(page.getByText('Interests saved.')).toBeVisible()
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    await expect(page.getByText('Interests saved.')).toHaveCount(0)
     await page.goto('/feed')
   }
 
@@ -283,7 +286,10 @@ test('profile fields persist and deletion requires explicit confirmation', async
   await page.getByRole('button', { name: 'Save profile' }).click()
   await expect(page).toHaveURL(/\/settings$/)
   await expect(page.getByText('Profile saved.')).toBeVisible()
+  await expect(page.getByTestId('nav-user-name')).toHaveText('Signal Test Editor')
   await page.reload()
+  await expect(page.getByText('Profile saved.')).toHaveCount(0)
+  await expect(page.getByTestId('nav-user-name')).toHaveText('Signal Test Editor')
   await expect(page.getByText('Signal Test Editor · editor@example.com')).toBeVisible()
   await page.getByRole('link', { name: /^Profile/ }).click()
   await expect(page.getByLabel('Display name')).toHaveValue('Signal Test Editor')
@@ -298,4 +304,46 @@ test('profile fields persist and deletion requires explicit confirmation', async
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   await expect(dialog).toHaveCount(0)
   await expect(page.getByText('Signal Test Editor · editor@example.com')).toBeVisible()
+})
+
+test('signed-in navigation expands on desktop and works as a mobile drawer', async ({ users }) => {
+  const [{ page }] = await users(1)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/feed')
+  const nav = page.getByRole('navigation', { name: 'App navigation' })
+  await expect(nav.getByRole('link', { name: 'Feed' })).toHaveAttribute('aria-current', 'page')
+  const collapse = page.getByRole('button', { name: 'Collapse sidebar' })
+  await collapse.focus()
+  await page.keyboard.press('Enter')
+  const expand = page.getByRole('button', { name: 'Expand sidebar' })
+  await expect(expand).toHaveAttribute('aria-expanded', 'false')
+  await expand.press('Enter')
+  await expect(collapse).toHaveAttribute('aria-expanded', 'true')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  const drawer = page.getByRole('dialog', { name: 'App navigation' })
+  await expect(drawer).toBeVisible()
+  await drawer.getByRole('link', { name: 'Podcasts' }).click()
+  await expect(page).toHaveURL('/podcasts')
+  await expect(drawer).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Podcasts' })).toBeVisible()
+})
+
+test('app pages align their headings and show comma-separated interest specifics', async ({ users }) => {
+  const [{ page }] = await users(1)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.route('**/api/actions/getInterests', (route) => route.fulfill({
+    json: { success: true, data: [{ category: 'Gaming', focus: ['GTA VI', 'Fortnite'] }] },
+  }))
+  await page.goto('/feed')
+  const heading = await page.getByRole('heading', { name: 'Your feed' }).boundingBox()
+  await expect(page.getByRole('list', { name: 'Your interests' })).toContainText('GTA VI, Fortnite')
+  for (const title of ['Podcasts', 'Settings']) {
+    await page.getByRole('navigation', { name: 'App navigation' }).getByRole('link', { name: title }).click()
+    const next = await page.getByRole('heading', { name: title, exact: true }).boundingBox()
+    expect(next?.x).toBe(heading?.x)
+    expect(next?.y).toBe(heading?.y)
+    expect(next?.height).toBe(heading?.height)
+  }
 })
