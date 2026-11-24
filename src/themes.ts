@@ -2,7 +2,7 @@
  * Theme catalog.
  *
  * The scaffold ships two placeholder themes: `slate` (dark default, defined
- * in styles.css) and `paper` (light example, defined in themes.css). They
+ * in styles.css) and `signal` (light editorial palette, defined in themes.css). They
  * are scaffolding, not a design — give the app its own theme before first
  * deploy:
  *   1. Add a `[data-theme="my-id"] { ... }` block in src/themes.css with
@@ -23,9 +23,9 @@ export const THEMES = [
     description: 'Neutral dark placeholder default. Replace with your own theme.',
   },
   {
-    id: 'paper',
-    label: 'Paper',
-    description: 'Light example theme showing the token contract. Replace or delete.',
+    id: 'signal',
+    label: 'Signal',
+    description: 'Warm paper, white surfaces, and emerald accents.',
   },
 ] as const
 
@@ -33,9 +33,9 @@ export type ThemeId = (typeof THEMES)[number]['id']
 
 /** Read the currently active theme id from <html data-theme>. */
 export function getActiveTheme(): ThemeId {
-  if (typeof document === 'undefined') return 'slate'
+  if (typeof document === 'undefined') return 'signal'
   const id = document.documentElement.getAttribute('data-theme') as ThemeId | null
-  return id ?? 'slate'
+  return id ?? 'signal'
 }
 
 /** Look up a theme entry by id, or fall back to the first theme. */

@@ -1,5 +1,6 @@
 @import "tailwindcss" source(none);
 @import "./themes.css";
+@import "./landing.css";
 
 /* Scan local source + SDK components for Tailwind class usage */
 @source "./**/*.{ts,tsx}";
@@ -16,7 +17,18 @@
  * Status colors (success, warning, info) are intentionally NOT themed —
  * they stay consistent across every preset.
  */
+@theme static {
+  --color-signal-paper: #F8F9F6;
+  --color-signal-surface: #FFFFFF;
+  --color-signal-ink: #171717;
+  --color-signal-muted: #737373;
+  --color-signal-green: #047857;
+  --color-signal-border: #E5E7EB;
+  --font-newsreader: "Newsreader", Georgia, serif;
+}
+
 @theme {
+
   /* shadcn core tokens — slate (default): neutral gray on near-black, indigo accent */
   --color-background: #0a0a0a;
   --color-foreground: #e8eaed;
@@ -160,7 +172,10 @@
   html, body, #root {
     min-height: 100vh;
     background-color: var(--color-background);
-    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
   }
 
   body {

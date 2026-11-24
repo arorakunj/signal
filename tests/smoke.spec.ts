@@ -69,3 +69,162 @@ test.describe('Smoke tests', () => {
     await expect(page.locator('text=404')).toBeVisible()
   })
 })
+
+test('the landing story expands, changes scenes and reverses with scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/')
+  const story = page.locator('.landing-story')
+  const frame = story.locator('.landing-story-frame')
+  const mask = story.locator('.landing-story-mask')
+  const observatory = story.locator('[data-story-scene="observatory"]')
+
+  await expect(story).toHaveAttribute('data-motion', 'active')
+  await expect(mask).toHaveCSS('clip-path', 'inset(0% 8% 12% round 32px)')
+  const start = await frame.evaluate((element) => element.getBoundingClientRect().top + window.scrollY)
+  await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), start + 3)
+  await expect(mask).toHaveCSS('clip-path', 'inset(-0.35% 0%)')
+  await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), start + 1900)
+  await expect(observatory).toHaveCSS('opacity', '1')
+
+  for (let pass = 0; pass < 3; pass++) {
+    await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), start + 850)
+    await expect(mask).toHaveCSS('clip-path', 'inset(-0.35% 0%)')
+    await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), start - 400)
+    await expect(mask).toHaveCSS('clip-path', 'inset(0% 8% 12% round 32px)')
+    await expect(frame).toHaveCSS('clip-path', 'none')
+    expect(await mask.evaluate((element) => {
+      const top = element.getBoundingClientRect().top
+      return [top - 1, top + 1, top + 20].some((y) =>
+        document.elementFromPoint(10, y)?.closest('[data-story-scene]'),
+      )
+    })).toBe(false)
+  }
+  await expect(observatory).toHaveCSS('opacity', '0')
+})
+
+test('the landing story remains readable with reduced motion on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/')
+  const story = page.locator('.landing-story')
+  await expect(story.getByRole('heading', { name: 'Follow a question.' })).toBeVisible()
+  await expect(story.getByRole('heading', { name: 'Take curiosity with you.' })).toBeVisible()
+  for (const image of await story.locator('img').all()) {
+    await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  }
+  await expect(story.locator('.landing-story-mask')).toHaveCSS('clip-path', 'none')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+})
+
+test('landing navigation scrolls to each section and fits narrow screens', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 })
+  await page.goto('/')
+  const nav = page.getByRole('navigation', { name: 'Page sections' })
+  const home = nav.getByRole('link', { name: 'Home' })
+  const tryIt = nav.getByRole('link', { name: 'Try it yourself' })
+
+  await expect(home).toHaveAttribute('aria-current', 'location')
+  await expect(nav.getByRole('link', { name: 'How it works' })).toHaveCount(0)
+  await tryIt.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#try-it-yourself$/)
+  await expect(tryIt).toHaveAttribute('aria-current', 'location')
+  await expect(page.getByRole('heading', { name: 'What you follow shapes what you get.' })).toBeInViewport()
+  await home.click()
+  await expect(page).toHaveURL(/#home$/)
+  await expect(home).toHaveAttribute('aria-current', 'location')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+})
+
+test('the pinned image fills the viewport after resizing', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  const story = page.locator('.landing-story')
+  const frame = story.locator('.landing-story-frame')
+  const mask = story.locator('.landing-story-mask')
+  await expect(story).toHaveAttribute('data-motion', 'active')
+
+  for (const [width, height] of [[390, 844], [844, 390], [1280, 800]]) {
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
+    await page.setViewportSize({ width, height })
+    await expect(frame).toHaveCSS('height', `${height}px`)
+    const start = await frame.evaluate((element) => element.getBoundingClientRect().top + window.scrollY)
+    await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), start + height * 0.65)
+    await expect(mask).toHaveCSS('clip-path', 'inset(-0.35% 0%)')
+    const gutter = await page.evaluate(() => ({
+      width: window.innerWidth - document.documentElement.clientWidth,
+      style: getComputedStyle(document.documentElement).scrollbarWidth,
+    }))
+    expect(gutter).toEqual({ width: 0, style: 'none' })
+    expect(await page.evaluate(() => Boolean(document.elementFromPoint(1, 0)?.closest('[data-story-scene]')))).toBe(true)
+    const frameBounds = await frame.boundingBox()
+    expect(frameBounds!.x).toBeCloseTo(0, 0)
+    expect(Math.abs(frameBounds!.y)).toBeLessThanOrEqual(1)
+    expect(frameBounds!.width).toBeCloseTo(width, 0)
+    expect(frameBounds!.height).toBeCloseTo(height, 0)
+    const image = frame.locator('[data-story-scene="coast"] img')
+    const bounds = await image.boundingBox()
+    expect(bounds!.x).toBeLessThanOrEqual(0)
+    expect(bounds!.y).toBeLessThanOrEqual(0)
+    expect(bounds!.x + bounds!.width).toBeGreaterThanOrEqual(width)
+    expect(bounds!.y + bounds!.height).toBeGreaterThanOrEqual(height)
+  }
+})
+
+test('the merged section and footer work on a tall desktop viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 })
+  await page.goto('/')
+  const tryIt = page.getByRole('link', { name: 'Try it yourself' })
+  await tryIt.click()
+  await expect(tryIt).toHaveAttribute('aria-current', 'location')
+
+  const section = page.getByRole('region', { name: 'What you follow shapes what you get.' })
+  await expect(section.getByRole('heading', { level: 2 })).toBeInViewport()
+  await expect(section.getByRole('link', { name: 'Choose your interests' })).toBeInViewport()
+  const footer = page.getByRole('contentinfo')
+  const copyright = footer.getByText('© 2026')
+  const notice = footer.getByText(/Signal uses AI/)
+  expect((await copyright.boundingBox())!.x).toBeLessThan(350)
+  expect((await notice.boundingBox())!.x).toBeGreaterThan(900)
+  await expect(footer.getByRole('link', { name: 'Back to top' })).toHaveCount(0)
+})
+
+
+test('the intro types once per document and reveals the supporting copy afterward', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/')
+  const copy = page.locator('[data-intro-copy]')
+  const typing = page.locator('[data-typing="true"]')
+  await expect(page.getByRole('heading', { name: 'signal.' })).toBeVisible()
+  await expect(typing).toHaveCount(2)
+  await expect(copy).toHaveCSS('opacity', '0')
+  await expect(typing).toHaveCount(0)
+  await expect(copy).toHaveCSS('opacity', '1')
+
+  await page.getByRole('link', { name: 'Choose your interests' }).first().click()
+  await expect(page).toHaveURL(/\/home$/)
+  await page.goBack()
+  await expect(copy).toHaveCSS('opacity', '1')
+  await expect(typing).toHaveCount(0)
+
+  await page.reload()
+  await expect(typing).toHaveCount(2)
+  await expect(copy).toHaveCSS('opacity', '0')
+})
+
+test('reduced motion skips the intro and the hero and footer share a wordmark style', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/')
+  await expect(page.locator('[data-typing="true"]')).toHaveCount(0)
+  await expect(page.locator('[data-intro-copy]')).toHaveCSS('opacity', '1')
+  const wordmarks = await page.locator('.landing-wordmark').evaluateAll(items =>
+    items.map(item => {
+      const { fontFamily, fontWeight, color } = getComputedStyle(item)
+      return { fontFamily, fontWeight, color }
+    }),
+  )
+  expect(wordmarks).toHaveLength(2)
+  expect(wordmarks[0]).toEqual(wordmarks[1])
+})

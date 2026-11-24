@@ -1,0 +1,232 @@
+/* A classic scrollbar reserves a strip outside the full-bleed scenes. */
+html:has(.landing-page) {
+  scrollbar-width: none;
+}
+
+html:has(.landing-page)::-webkit-scrollbar {
+  display: none;
+}
+
+.landing-story-mask {
+  display: grid;
+  gap: 1.5rem;
+  overflow: hidden;
+}
+
+.landing-story-scene {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-items: end;
+  min-height: min(43rem, 90svh);
+  margin-inline: clamp(1rem, 8vw, 8rem);
+  overflow: hidden;
+  border-radius: clamp(1.25rem, 3vw, 2rem);
+  background: #233b37;
+}
+
+.landing-story-scene > img {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--landing-image-position, center);
+}
+
+.landing-story-scene::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(0deg, rgb(9 20 20 / 77%), rgb(9 20 20 / 8%) 68%);
+  content: '';
+}
+
+.landing-story-layout {
+  display: grid;
+  gap: 1.5rem;
+  width: min(100%, 76rem);
+  margin-inline: auto;
+  padding: clamp(1.25rem, 4vw, 4rem);
+}
+
+.landing-story-headline {
+  align-self: end;
+  color: white;
+}
+
+.landing-story-headline h2 {
+  max-width: 12ch;
+  font-family: var(--font-newsreader);
+  font-size: clamp(2.3rem, 6vw, 5.6rem);
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+}
+
+.landing-story-headline p {
+  max-width: 32ch;
+  margin-top: 0.8rem;
+  font-size: clamp(0.875rem, 2vw, 1.125rem);
+  line-height: 1.45;
+}
+
+.landing-story-previews {
+  display: grid;
+  align-content: end;
+  gap: 0.65rem;
+}
+
+.landing-story-card {
+  padding: clamp(0.8rem, 2vw, 1.35rem);
+  border: 1px solid var(--color-signal-border);
+  border-radius: 0.9rem;
+  background: var(--color-signal-surface);
+  color: var(--color-signal-ink);
+  box-shadow: 0 14px 36px rgb(0 0 0 / 16%);
+}
+
+.landing-story-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-signal-green);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.landing-story-card h3 {
+  margin-top: 0.4rem;
+  font-family: var(--font-newsreader);
+  font-size: clamp(1.35rem, 3vw, 2.15rem);
+  font-weight: 600;
+  line-height: 1.05;
+}
+
+.landing-story-card p {
+  margin-top: 0.35rem;
+  color: var(--color-signal-muted);
+  font-size: 0.8125rem;
+}
+
+.landing-story-player-track {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+  color: var(--color-signal-muted);
+  font-size: 0.75rem;
+}
+
+.landing-story-play {
+  display: grid;
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-signal-green);
+  color: white;
+}
+
+.landing-story-progress {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--color-signal-green) 28%, var(--color-signal-border) 28%);
+}
+
+/* The pinned frame stays geometry-only. The inner mask owns the image crop. */
+.landing-story[data-motion="active"] .landing-story-frame {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+}
+
+.landing-story[data-motion="active"] .landing-story-mask {
+  position: absolute;
+  inset: 0;
+  display: block;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.landing-story[data-motion="active"] .landing-story-scene {
+  position: absolute;
+  /* Cover fractional-pixel offsets from browser scroll and zoom. */
+  inset: -0.35% 0;
+  min-height: 0;
+  margin: 0;
+  border-radius: 0;
+}
+
+@media (min-width: 48rem) {
+  .landing-story-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.62fr);
+    gap: 3rem;
+  }
+
+  .landing-story-sources {
+    width: 76%;
+    margin-left: auto;
+  }
+}
+
+@media (max-height: 560px) {
+  .landing-story-layout { gap: 0.75rem; }
+  .landing-story-headline h2 { font-size: 2rem; }
+  .landing-story-headline p { margin-top: 0.35rem; }
+}
+
+.landing-header {
+  top: max(0.75rem, env(safe-area-inset-top));
+  margin-block: 0.75rem 1rem;
+}
+
+.landing-nav-links > [data-nav-item] + [data-nav-item]::before {
+  position: absolute;
+  inset-block: 50% auto;
+  left: 0;
+  width: 1px;
+  height: 1.5rem;
+  transform: translateY(-50%);
+  background: var(--color-border);
+  content: '';
+  pointer-events: none;
+}
+
+@media (min-width: 40rem) {
+  .landing-nav-links > [data-nav-item] + [data-nav-item]::before { height: 2rem; }
+}
+
+.landing-page section[id] {
+  scroll-margin-top: 5.5rem;
+}
+
+@media (max-width: 47.99rem) {
+  [data-story-scene="coast"] { --landing-image-position: 65% center; }
+  [data-story-scene="observatory"] { --landing-image-position: 52% center; }
+}
+
+@media (max-height: 540px) and (orientation: landscape) {
+  .landing-story-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(min(14rem, 45%), 0.9fr);
+    align-items: end;
+    padding-block: 1rem;
+  }
+}
+
+.landing-section-heading {
+  color: var(--color-signal-ink);
+  font-family: var(--font-newsreader);
+  font-size: clamp(2.25rem, 5vw, 3.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.landing-wordmark {
+  color: #000;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: -0.055em;
+}

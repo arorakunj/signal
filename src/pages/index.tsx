@@ -1,49 +1,73 @@
-/**
- * Landing page — a STATIC page.
- *
- * It lives at the top level of src/pages/ (not under (app)/), so it renders
- * with no DeepSpace providers: no auth session fetch, no records WebSocket.
- * That makes it cheap to serve and safe for logged-out / crawler traffic.
- *
- * Need live data or auth here? Move this file to src/pages/(app)/index.tsx
- * and it becomes a dynamic page. Conversely, any page you want to keep static
- * (marketing, docs, legal) belongs at this top level.
- *
- * Top-level pages are also prerendered to static HTML at build
- * (prerender.ts, via vite.config.ts) so crawlers read real content.
- * Keep them renderable without a browser: no window/document during render,
- * prose in HTML text, reveal animations in CSS keyframes rather than JS-driven
- * initial states. `<Seo>` comes first and reads src/seo.ts.
- */
-
+import { ArrowUpRight, AudioLines, BookOpen, Compass } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import LandingIntro from '../components/LandingIntro'
+import LandingNav from '../components/LandingNav'
+import LandingStory from '../components/LandingStory'
 import { Seo } from '../components/Seo'
-import { APP_NAME } from '../constants'
 import { seo } from '../seo'
 
 export default function Landing() {
   return (
     <>
       <Seo {...seo} path="/" />
-      <div
-        data-testid="static-landing"
-        className="flex min-h-screen flex-col items-center justify-center px-6 text-center"
-      >
-        <p className="mb-3 text-sm uppercase tracking-widest text-muted-foreground">{APP_NAME}</p>
-        <h1 className="mb-4 max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-          A DeepSpace app with a static front door
-        </h1>
-        <p className="mb-8 max-w-md text-muted-foreground">
-          This landing page ships no auth call and no realtime connection — it's a
-          plain static page. The live app, with sign-in and synced data, lives
-          behind the link below.
-        </p>
-        <Link
-          to="/home"
-          className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Enter the app
-        </Link>
+      <div id="home" data-testid="static-landing" className="landing-page flow-root min-h-svh bg-signal-paper text-signal-ink">
+        <LandingNav />
+
+        <main>
+          <LandingIntro />
+
+          <LandingStory />
+
+          <section id="try-it-yourself" aria-labelledby="features-heading" className="mx-auto max-w-6xl px-6 pb-14 pt-20 sm:px-10 sm:pb-20 sm:pt-28 lg:pt-32">
+            <h2 id="features-heading" className="landing-section-heading mx-auto max-w-3xl text-center">
+              What you follow shapes what you get.
+            </h2>
+            <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-3">
+              <article className="bg-card p-6 sm:p-8">
+                <Compass size={22} className="text-primary" aria-hidden="true" />
+                <h3 className="mt-4 text-lg font-semibold">A feed built around your interests</h3>
+                <p className="mt-2 leading-relaxed text-muted-foreground">
+                  Pick topics or describe something specific you’re curious about. Signal searches for recent coverage across the web.
+                </p>
+              </article>
+              <article className="bg-card p-6 sm:p-8">
+                <BookOpen size={22} className="text-primary" aria-hidden="true" />
+                <h3 className="mt-4 text-lg font-semibold">AI-written stories with citations</h3>
+                <p className="mt-2 leading-relaxed text-muted-foreground">
+                  Signal brings the findings together in an article with links to the original sources, so you can dig deeper or check a claim.
+                </p>
+              </article>
+              <article className="bg-card p-6 sm:p-8">
+                <AudioLines size={22} className="text-primary" aria-hidden="true" />
+                <h3 className="mt-4 text-lg font-semibold">A daily briefing you can listen to</h3>
+                <p className="mt-2 leading-relaxed text-muted-foreground">
+                  Signal turns those stories into a short personal podcast, with a transcript and links back to the reporting.
+                </p>
+              </article>
+            </div>
+            <div className="mt-9 flex flex-col items-center text-center sm:mt-12">
+              <p className="font-newsreader text-2xl text-signal-ink sm:text-3xl">Start with what makes you curious.</p>
+              <Link
+                to="/home"
+                className="mt-7 inline-flex items-center gap-3 rounded-full bg-signal-green px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-900"
+              >
+                Choose your interests
+                <ArrowUpRight size={16} aria-hidden="true" />
+              </Link>
+            </div>
+          </section>
+        </main>
+        <footer className="border-t border-signal-border bg-[#EAEFE8]">
+          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:gap-10 sm:px-10">
+            <div className="flex shrink-0 items-baseline gap-3">
+              <p className="landing-wordmark text-2xl">signal.</p>
+              <p className="font-mono text-xs tracking-[0.12em] text-signal-ink/65">© 2026</p>
+            </div>
+            <div className="max-w-sm text-sm leading-relaxed text-signal-ink/75">
+              <p>Signal uses AI to summarize reporting. It can miss context or make mistakes. Check the original sources before relying on a claim.</p>
+            </div>
+          </div>
+        </footer>
       </div>
     </>
   )
