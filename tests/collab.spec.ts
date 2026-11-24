@@ -131,3 +131,75 @@ test('API status page shows local retry after first-load API failure', async ({ 
   await expect.poll(() => requestCount).toBeGreaterThan(requestsAfterFailure)
   expect(user.page.url()).toBe(urlAfterFailure)
 })
+
+test('profiles persist after refresh and remain isolated between accounts', async ({ users }) => {
+  const [first, second] = await users(2)
+  const scenarios = [
+    { page: first.page, topic: 'Science', privateTopic: 'Deep sea exploration' },
+    { page: second.page, topic: 'Music', privateTopic: 'Jazz guitar' },
+  ]
+
+  for (const { page, topic, privateTopic } of scenarios) {
+    await page.goto('/settings')
+    const preset = page.getByRole('button', { name: topic, exact: true })
+    await expect(preset).toBeVisible()
+    if (await preset.getAttribute('aria-pressed') === 'false') await preset.click()
+    await page.getByLabel('Add your own interest').fill(privateTopic)
+    await page.getByLabel('Add your own interest').press('Enter')
+    await page.getByRole('button', { name: 'Save interests' }).click()
+    await expect(page.getByText('Interests saved.')).toBeVisible()
+    await page.goto('/feed')
+  }
+
+  for (const { page, topic, privateTopic } of scenarios) {
+    await page.reload()
+    await expect(page.getByText(topic, { exact: true })).toBeVisible()
+    await expect(page.getByText(privateTopic, { exact: true })).toBeVisible()
+    const other = scenarios.find((scenario) => scenario.page !== page)!
+    await expect(page.getByText(other.privateTopic, { exact: true })).toHaveCount(0)
+  }
+
+  await first.page.goto('/settings')
+  await first.page.getByRole('button', { name: 'Remove Deep sea exploration' }).click()
+  await first.page.getByRole('button', { name: 'Save interests' }).click()
+  await expect(first.page.getByText('Interests saved.')).toBeVisible()
+  await first.page.goto('/feed')
+  await expect(first.page.getByText('Science', { exact: true })).toBeVisible()
+  await expect(first.page.getByText('Deep sea exploration', { exact: true })).toHaveCount(0)
+})
+
+test('signed-in readers without interests complete setup before opening the feed', async ({ users }) => {
+  const [reader] = await users(1)
+  const { page } = reader
+  // Simulate an empty profile once so this runs again with the same test accounts.
+  await page.route('**/api/actions/getInterests', (route) => route.fulfill({
+    json: { success: true, data: [] },
+  }), { times: 1 })
+
+  // DeepSpace sends the browser to /home after its OAuth callbacks.
+  await page.goto('/home')
+  await expect(page.getByRole('heading', { name: 'Choose your interests' })).toBeVisible()
+  await page.getByRole('button', { name: 'Science', exact: true }).click()
+  await page.getByLabel('Add your own interest').fill('Planetary geology')
+  await page.getByLabel('Add your own interest').press('Enter')
+
+  await page.route('**/api/actions/saveInterests', (route) => route.fulfill({
+    json: { success: false, error: 'Could not save your interests.' },
+  }), { times: 1 })
+  await page.getByRole('button', { name: 'Save interests' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Could not save your interests.')
+  await expect(page.getByRole('heading', { name: 'Choose your interests' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Save interests' }).click()
+  await expect(page).toHaveURL(/\/feed$/)
+  await expect(page.getByText('Planetary geology', { exact: true })).toBeVisible()
+
+  await page.goto('/sign-in')
+  await expect(page).toHaveURL(/\/feed$/)
+  await expect(page.getByText('Planetary geology', { exact: true })).toBeVisible()
+
+  await page.goto('/home?setup')
+  await expect(page).toHaveURL(/\/feed$/)
+  await expect(page.getByText('Planetary geology', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Choose your interests' })).toHaveCount(0)
+})

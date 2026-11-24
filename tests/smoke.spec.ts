@@ -70,6 +70,38 @@ test.describe('Smoke tests', () => {
   })
 })
 
+test('landing entry points require sign-in before choosing interests', async ({ page }) => {
+  for (const entry of ['Choose your interests', 'Sign in']) {
+    await page.goto('/')
+    await page.getByRole('link', { name: entry, exact: true }).first().click()
+    await expect(page).toHaveURL(/\/sign-in$/)
+    await expect(page.getByTestId('auth-overlay')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Sign in to Signal' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Choose your interests' })).toHaveCount(0)
+  }
+
+  await page.goto('/home?setup')
+  await expect(page).toHaveURL(/\/sign-in$/)
+  await expect(page.getByRole('button', { name: 'Save interests' })).toHaveCount(0)
+})
+
+test('signed-out visitors cannot open the feed or settings by URL', async ({ page }) => {
+  for (const path of ['/home', '/feed', '/settings']) {
+    await page.goto(path)
+    await expect(page).toHaveURL(/\/sign-in$/)
+    await expect(page.getByRole('heading', { name: 'Sign in to Signal' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Your feed' })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Choose your interests' })).toHaveCount(0)
+  }
+})
+
+test('profile actions reject anonymous requests', async ({ request }) => {
+  for (const name of ['getInterests', 'saveInterests']) {
+    const response = await request.post(`/api/actions/${name}`, { data: {} })
+    expect(response.status()).toBe(401)
+  }
+})
+
 test('the landing story expands, changes scenes and reverses with scroll', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.emulateMedia({ reducedMotion: 'no-preference' })
@@ -204,7 +236,7 @@ test('the intro types once per document and reveals the supporting copy afterwar
   await expect(copy).toHaveCSS('opacity', '1')
 
   await page.getByRole('link', { name: 'Choose your interests' }).first().click()
-  await expect(page).toHaveURL(/\/home$/)
+  await expect(page).toHaveURL(/\/sign-in$/)
   await page.goBack()
   await expect(copy).toHaveCSS('opacity', '1')
   await expect(typing).toHaveCount(0)

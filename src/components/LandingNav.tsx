@@ -50,7 +50,7 @@ export default function LandingNav() {
           className="landing-nav-links rounded-full border-0 bg-transparent"
           iconContainerClassName="min-h-12 rounded-full px-2 text-xs sm:min-h-14 sm:px-5 sm:text-base"
         />
-        <Link to="/home" className="shrink-0 border-l border-border px-2 py-1 text-xs font-semibold text-primary underline-offset-4 hover:underline sm:px-5 sm:text-base">
+        <Link to="/sign-in" className="shrink-0 border-l border-border px-2 py-1 text-xs font-semibold text-primary underline-offset-4 hover:underline sm:px-5 sm:text-base">
           Sign in
         </Link>
       </div>

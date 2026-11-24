@@ -48,7 +48,7 @@ export default function Landing() {
             <div className="mt-9 flex flex-col items-center text-center sm:mt-12">
               <p className="font-newsreader text-2xl text-signal-ink sm:text-3xl">Start with what makes you curious.</p>
               <Link
-                to="/home"
+                to="/sign-in"
                 className="mt-7 inline-flex items-center gap-3 rounded-full bg-signal-green px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-900"
               >
                 Choose your interests

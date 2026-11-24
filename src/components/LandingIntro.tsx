@@ -43,7 +43,7 @@ export default function LandingIntro() {
         Source-backed stories and a daily podcast about the topics you care about.
       </p>
       <Link
-        to="/home"
+        to="/sign-in"
         className="mt-8 inline-flex items-center gap-3 rounded-full bg-signal-green px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-900"
       >
         Choose your interests

@@ -1,41 +1,47 @@
-/**
- * Example gated page. Reached at /settings — no auth logic lives here
- * because (protected)/_layout.tsx already wraps the subtree in <AuthGate>.
- */
+import { useEffect, useState } from 'react'
+import InterestPicker from '@/components/InterestPicker'
+import { profileAction } from '@/lib/profile'
 
-import { signOut, useUser } from 'deepspace'
-import { Button } from '@/components/ui'
+export default function Settings() {
+  const [interests, setInterests] = useState<string[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
-export default function SettingsPage() {
-  const { user } = useUser()
+  useEffect(() => {
+    let active = true
+    profileAction('getInterests').then(
+      (data) => { if (active) setInterests(data) },
+      () => { if (active) setError('Could not load your interests.') },
+    )
+    return () => { active = false }
+  }, [attempt])
+
+  async function save(next: string[]) {
+    setBusy(true)
+    setError('')
+    setSaved(false)
+    try {
+      await profileAction('saveInterests', next)
+      setSaved(true)
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not save your interests.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
-    // No background on page wrappers — pages render into whatever the app's
-    // (app)/_layout provides (a plain background, or a raised panel), so they
-    // stay transparent and inherit it.
-    <div className="min-h-full text-foreground">
-      <div className="mx-auto max-w-2xl px-6 py-20">
-        <h1 className="mb-12 text-4xl font-bold tracking-tight">Settings</h1>
-
-        <section className="rounded-lg border border-border bg-card p-6">
-          <h2 className="mb-4 text-lg font-semibold">Your account</h2>
-
-          <dl className="space-y-3 text-sm">
-            <div>
-              <dt className="text-muted-foreground">Name</dt>
-              <dd className="text-foreground">{user?.name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Email</dt>
-              <dd className="text-foreground">{user?.email ?? '—'}</dd>
-            </div>
-          </dl>
-
-          <Button variant="secondary" className="mt-6" onClick={() => signOut()}>
-            Sign out
-          </Button>
-        </section>
+    <section className="min-h-full bg-background px-6 py-16 text-foreground">
+      <div className="mx-auto max-w-2xl">
+        <h1 className="mb-8 font-serif text-5xl tracking-tight">Your interests</h1>
+        {interests ? <InterestPicker initial={interests} label="Save interests" onSubmit={save} busy={busy} />
+          : !error && <p role="status">Loading your interests…</p>}
+        {error && <p role="alert" className="mt-4 text-destructive">{error}</p>}
+        {error && !interests && <button className="mt-3 text-primary underline" onClick={() => { setError(''); setAttempt(attempt + 1) }}>Try again</button>}
+        {saved && <p role="status" className="mt-4 text-primary">Interests saved.</p>}
       </div>
-    </div>
+    </section>
   )
 }
