@@ -33,6 +33,7 @@ export default function BriefingPanel({ kind }: { kind: GenerationKind }) {
   const [briefing, setBriefing] = useState<Briefing | null>(null)
   const [pending, setPending] = useState<GenerationKind | null>(null)
   const [error, setError] = useState<{ message: string; canRefresh?: boolean } | null>(null)
+  const [notice, setNotice] = useState('')
   const [attempt, setAttempt] = useState(0)
   const watchingRun = useRef(false)
 
@@ -48,6 +49,7 @@ export default function BriefingPanel({ kind }: { kind: GenerationKind }) {
           watchingRun.current = true
         } else {
           if (watchingRun.current && run?.status === 'failed') setError({ message: run.message })
+          if (watchingRun.current && run?.status === 'no_coverage') setNotice(run.message)
           watchingRun.current = false
         }
         setBriefing(next)
@@ -84,6 +86,7 @@ export default function BriefingPanel({ kind }: { kind: GenerationKind }) {
   async function generate() {
     setPending(kind)
     setError(null)
+    setNotice('')
     try {
       await briefingAction('startBriefing', { kind })
       watchingRun.current = true
@@ -126,6 +129,7 @@ export default function BriefingPanel({ kind }: { kind: GenerationKind }) {
       <div className="mt-3 space-y-1 text-sm" aria-live="polite">
         {pending && <p>Starting generation…</p>}
         {busy(run ?? null) && <p className="text-muted-foreground">{run?.message}</p>}
+        {notice && <p className="text-muted-foreground">{notice}</p>}
       </div>
       {error && <p role="alert" className="mt-3 text-sm text-destructive">{error.message}{' '}
         {error.canRefresh && <button type="button" className="underline" onClick={() => { setError(null); setAttempt((value) => value + 1) }}>Refresh status</button>}

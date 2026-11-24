@@ -259,19 +259,21 @@ test('daily reports filter independently from the protected podcast page', async
       { id: 'S2', title: 'Lunar coverage', url: 'https://example.org/moon', publisher: 'example.org', publishedAt: null },
     ],
   }
+  const noCoverage = 'We couldn’t find any new, source-backed stories for your interests in the last 48 hours.'
   let generated = false
   let requests = 0
   await page.route('**/api/actions/getBriefing', (route) => route.fulfill({ json: {
     success: true,
     data: {
-      report: requests === 2 ? { status: 'failed', message: 'Story generation failed in the background.' } : null,
+      report: requests === 2 ? { status: 'failed', message: 'Story generation failed in the background.' }
+        : requests === 3 ? { status: 'no_coverage', message: noCoverage } : null,
       podcast: null, latestPodcast: null, latestReport: generated ? report : null, todayReport: generated ? report : null,
     },
   } }))
   await page.route('**/api/actions/startBriefing', (route) => {
     expect(route.request().postDataJSON()).toEqual({ kind: 'report' })
     if (++requests === 1) return route.fulfill({ json: { success: false, error: 'Claude could not complete generation.' } })
-    generated = requests === 3
+    generated = requests === 4
     return route.fulfill({ json: { success: true, data: { status: 'queued' } } })
   })
   await page.goto('/feed')
@@ -285,6 +287,9 @@ test('daily reports filter independently from the protected podcast page', async
   await expect(picks.getByRole('alert')).toContainText('Story generation failed in the background.')
   await page.reload()
   await expect(picks.getByRole('button', { name: 'Generate stories' })).toBeEnabled()
+  await expect(picks.getByRole('alert')).toHaveCount(0)
+  await picks.getByRole('button', { name: 'Generate stories' }).click()
+  await expect(picks.getByText(noCoverage)).toBeVisible()
   await expect(picks.getByRole('alert')).toHaveCount(0)
   await picks.getByRole('button', { name: 'Generate stories' }).click()
   await expect(picks.getByRole('button', { name: 'Generate stories' })).toBeDisabled()

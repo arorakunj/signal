@@ -33,7 +33,7 @@ describe('briefing pipeline', () => {
 
   it('skips generation if no usable evidence remains', async () => {
     const integrate = vi.fn(async () => ({ results: [{ invalid: true }] }))
-    await expect(generateReport(integrate, [{ category: 'Science', focus: [] }], () => {})).rejects.toThrow('No usable coverage')
+    await expect(generateReport(integrate, [{ category: 'Science', focus: [] }], () => {})).rejects.toThrow('couldn’t find any new, source-backed stories')
     expect(integrate).toHaveBeenCalledTimes(1)
   })
 
@@ -118,6 +118,35 @@ describe('briefing pipeline', () => {
       : claude({ reports: [{ groupId: '1', heading: 'Ocean research', text: excerpt, citations: ['S1'] }] })
     const report = await generateReport(integrate, [{ category: 'Science', focus: [] }], () => {})
     expect(report.sections[0]).toMatchObject({ category: 'Science', citations: ['S1'] })
+  })
+
+  it('retries a malformed draft for Rubik’s cubes with the same evidence', async () => {
+    const cube = { ...source, title: 'Speedcubing tournament announces finalists',
+      highlights: ['Organizers published the finalists for the weekend speedcubing tournament.'] }
+    const integrate = vi.fn()
+      .mockResolvedValueOnce({ results: [cube] })
+      .mockResolvedValueOnce(claude({ reports: [{ groupId: 1, heading: null, citations: ['S1'] }] }))
+      .mockResolvedValueOnce(claude({ reports: [
+        { heading: cube.title, text: cube.highlights[0], summary: null, citations: ['S1'] },
+      ] }))
+    const report = await generateReport(integrate, [{ category: 'Other interests', focus: ["rubik's cubes"] }], () => {})
+    expect(report.sections[0]).toMatchObject({ heading: cube.title, citations: ['S1'] })
+    expect(integrate.mock.calls.map(([endpoint]) => endpoint)).toEqual([
+      'exa/search', 'anthropic/chat-completion', 'anthropic/chat-completion',
+    ])
+    expect(integrate.mock.calls[1][1].messages).toEqual(integrate.mock.calls[2][1].messages)
+  })
+
+  it.each([
+    [],
+    [{ groupId: 1, heading: null, text: null, citations: [] }],
+  ].map((reports) => ({ reports })))('reports insufficient evidence without retrying when Claude returns $reports', async ({ reports }) => {
+    const integrate = vi.fn()
+      .mockResolvedValueOnce({ results: [source] })
+      .mockResolvedValueOnce(claude({ reports }))
+    await expect(generateReport(integrate, [{ category: 'Other interests', focus: ["rubik's cubes"] }], () => {}))
+      .rejects.toThrow('couldn’t find any new, source-backed stories')
+    expect(integrate).toHaveBeenCalledTimes(2)
   })
 
   it('preserves older interest profiles and maps them into categories', () => {

@@ -3,8 +3,9 @@ import { z } from 'zod'
 import { editionDay } from '../lib/edition'
 import type { Env } from '../../worker'
 import { briefingRequest, runJob } from '../jobs'
+import { NoRecentCoverage } from './briefing-pipeline'
 
-type Run = { status: 'queued' | 'running' | 'succeeded' | 'failed'; message: string; started: number; request_key: string | null }
+type Run = { status: 'queued' | 'running' | 'succeeded' | 'failed' | 'no_coverage'; message: string; started: number; request_key: string | null }
 
 export class BriefingRoom extends JobRoom<Env> {
   private readonly deleting = new Set<string>()
@@ -127,7 +128,7 @@ export class BriefingRoom extends JobRoom<Env> {
     }
 
     const usage = this.sql.exec<{ attempts: number; failures: number }>(
-      `SELECT count(*) AS attempts, count(CASE WHEN status = 'failed' THEN 1 END) AS failures
+      `SELECT count(*) AS attempts, count(CASE WHEN status IN ('failed', 'no_coverage') THEN 1 END) AS failures
        FROM signal_runs WHERE reader = ? AND kind = ? AND started >= ?`,
       payload.userId, payload.kind, day,
     ).one()
@@ -167,8 +168,12 @@ export class BriefingRoom extends JobRoom<Env> {
       })
       update('succeeded', 'Ready.')
     } catch (error) {
+      if (error instanceof NoRecentCoverage) {
+        update('no_coverage', error.message)
+        return
+      }
       const detail = error instanceof Error ? error.message : ''
-      const safe = /^(No usable coverage|No verified reports|Save your interests|The draft cited|Claude did not|The generated script|ElevenLabs returned)/.test(detail)
+      const safe = /^(No verified reports|Save your interests|The draft cited|Claude did not|The generated script|ElevenLabs returned)/.test(detail)
       const provider = /^Integration call (exa|anthropic|elevenlabs)\//.exec(detail)?.[1]
       const service = { exa: 'Exa search', anthropic: 'Claude', elevenlabs: 'ElevenLabs' }[provider ?? '']
       const needsCredits = /insufficient|credits/i.test(detail)

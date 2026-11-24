@@ -63,7 +63,7 @@ export const archiveSchema = z.object({
 export const BRIEFING_UPDATED = 'signal:briefing-updated'
 
 export const progressSchema = z.object({
-  status: z.enum(['queued', 'running', 'succeeded', 'failed']),
+  status: z.enum(['queued', 'running', 'succeeded', 'failed', 'no_coverage']),
   message: z.string(),
 })
 export const briefingStatusSchema = z.object({
