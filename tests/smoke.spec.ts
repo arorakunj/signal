@@ -86,7 +86,7 @@ test('landing entry points require sign-in before choosing interests', async ({ 
 })
 
 test('signed-out visitors cannot open the feed or settings by URL', async ({ page }) => {
-  for (const path of ['/home', '/feed', '/podcasts', '/settings']) {
+  for (const path of ['/home', '/feed', '/archive', '/podcasts', '/settings']) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/sign-in$/)
     await expect(page.getByRole('heading', { name: 'Sign in to Signal' })).toBeVisible()

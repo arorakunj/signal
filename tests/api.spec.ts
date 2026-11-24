@@ -24,7 +24,7 @@ test('an incomplete OAuth callback returns an explicit sign-in error', async ({ 
 })
 
 test('generation actions require sign-in and paid provider routes stay server-only', async ({ request }) => {
-  for (const action of ['getBriefing', 'startBriefing']) {
+  for (const action of ['getBriefing', 'startBriefing', 'listReportEditions']) {
     const response = await request.post(`/api/actions/${action}`, { data: {} })
     expect(response.status()).toBe(401)
   }

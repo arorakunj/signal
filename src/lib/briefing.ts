@@ -14,21 +14,24 @@ export const reportDraft = z.object({
   title: z.string().trim().min(1).max(180),
   summary: z.string().trim().min(1).max(700),
   sections: z.array(z.object({
-    heading: z.string().trim().min(1).max(160),
+    heading: z.string().trim().min(1).max(220),
     category: categorySchema.optional(),
-    summary: z.string().trim().min(1).max(360).optional(),
-    text: z.string().trim().min(1).max(2300),
+    categories: z.array(categorySchema).min(1).optional(),
+    summary: z.string().trim().min(1).max(600).optional(),
+    text: z.string().trim().min(1).max(4000),
     citations: citationIds,
   })).min(1).max(6),
 })
 
-export const topPicksDraft = z.object({
-  picks: z.array(reportDraft.shape.sections.element.required()).max(3),
-})
+export const dailyReportDraft = reportDraft.shape.sections.element
+  .omit({ category: true, categories: true })
+  .extend({
+    groupId: z.union([z.number().int().min(1).max(3), z.enum(['1', '2', '3']).transform(Number)]),
+  })
 
 export const reportSchema = reportDraft.extend({
   id: z.string(),
-  createdAt: z.string(),
+  createdAt: z.iso.datetime({ offset: true }),
   sources: z.array(sourceSchema).min(1),
 })
 export type Report = z.infer<typeof reportSchema>
@@ -51,7 +54,15 @@ export const podcastSchema = z.object({
 })
 export type Podcast = z.infer<typeof podcastSchema>
 
-const progressSchema = z.object({
+export const archiveSchema = z.object({
+  reports: z.array(z.object({ edition: z.iso.date(), report: reportSchema })),
+  podcasts: z.array(z.object({ publishedAt: z.iso.datetime({ offset: true }), podcast: podcastSchema })),
+  pending: z.boolean(),
+})
+
+export const BRIEFING_UPDATED = 'signal:briefing-updated'
+
+export const progressSchema = z.object({
   status: z.enum(['queued', 'running', 'succeeded', 'failed']),
   message: z.string(),
 })
@@ -59,6 +70,7 @@ export const briefingStatusSchema = z.object({
   report: progressSchema.nullable(),
   podcast: progressSchema.nullable(),
   latestReport: reportSchema.nullable(),
+  todayReport: reportSchema.nullable(),
   latestPodcast: podcastSchema.nullable(),
 })
 

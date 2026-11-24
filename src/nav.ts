@@ -17,6 +17,7 @@ export interface NavItem {
 
 export const nav: NavItem[] = [
   { path: '/feed', label: 'Feed' },
+  { path: '/archive', label: 'Story archive' },
   { path: '/podcasts', label: 'Podcasts' },
   { path: '/settings', label: 'Settings' },
   // The /api-status debug page still exists — add

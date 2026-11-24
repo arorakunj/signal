@@ -20,7 +20,7 @@ describe('briefing pipeline', () => {
   it('searches 48 hours, deduplicates URLs and persists only valid source references', async () => {
     const integrate = vi.fn(async (endpoint: string) => endpoint === 'exa/search'
       ? { results: [source, { ...source, url: 'https://example.org/ocean#top' }, { ...source, title: 'Election results' }] }
-      : claude({ picks: draft.sections }))
+      : claude({ reports: [{ ...draft.sections[0], groupId: 1 }] }))
     const report = await generateReport(integrate, [{ category: 'Science', focus: [] }], () => {})
     expect(integrate).toHaveBeenCalledTimes(2)
     const input = integrate.mock.calls[0] as unknown as [string, { startPublishedDate: string }]
@@ -40,20 +40,22 @@ describe('briefing pipeline', () => {
   it('rejects an invented source ID', async () => {
     const integrate = async (endpoint: string) => endpoint === 'exa/search'
       ? { results: [source] }
-      : claude({ picks: [{ ...draft.sections[0], citations: ['S99'] }] })
-    await expect(generateReport(integrate, [{ category: 'Science', focus: [] }], () => {})).rejects.toThrow('No verified picks')
+      : claude({ reports: [{ ...draft.sections[0], groupId: 1, citations: ['S99'] }] })
+    await expect(generateReport(integrate, [{ category: 'Science', focus: [] }], () => {})).rejects.toThrow('No verified reports')
   })
 
   it('uses music specifics, excludes health studies and keeps picks in distinct categories', async () => {
     const tour = { ...source, title: 'Artist announces jazz world tour', url: 'https://example.org/jazz-tour' }
     const musicStudy = { ...source, title: 'Music shows benefits for child development and patient health outcomes', url: 'https://example.org/study' }
-    const musicPick = { ...draft.sections[0], category: 'Music', heading: 'A new jazz tour', citations: ['S1'] }
-    const sciencePick = { ...draft.sections[0], citations: ['S2'] }
+    const musicPick = { ...draft.sections[0], groupId: 1, heading: 'A new jazz tour', citations: ['S1'] }
+    const sciencePick = { ...draft.sections[0], groupId: 2, citations: ['S2'] }
     const integrate = vi.fn(async (endpoint: string, input: Record<string, unknown>) => {
       if (endpoint !== 'exa/search') {
-        const { evidence } = JSON.parse((input.messages as { content: string }[])[0].content)
+        const request = JSON.parse((input.messages as { content: string }[])[0].content)
+        if (Array.isArray(request)) return claude({ groups: [['Music'], ['Science']] })
+        const { evidence } = request
         expect(evidence.map(({ title }: { title: string }) => title)).toEqual([tour.title, source.title])
-        return claude({ picks: [musicPick, { ...musicPick, citations: ['S2'] }, sciencePick] })
+        return claude({ reports: [{ ...musicPick, citations: ['S2'] }, musicPick, sciencePick] })
       }
       if (String(input.query).includes('Music')) {
         expect(input.query).toContain('Jazz guitar')
@@ -66,6 +68,56 @@ describe('briefing pipeline', () => {
     ], () => {})
     expect(report.sections.map(({ category }) => category)).toEqual(['Music', 'Science'])
     expect(report.sources.map(({ title }) => title)).toEqual([tour.title, source.title])
+  })
+
+  it('groups related interests, gives them more room and looks up grouped specifics together', async () => {
+    const integrate = vi.fn(async (endpoint: string, input: Record<string, unknown>) => {
+      if (endpoint === 'exa/search') return { results: [source] }
+      const request = JSON.parse((input.messages as { content: string }[])[0].content)
+      if (Array.isArray(request)) return claude({ groups: [['Science', 'Technology'], ['Gaming']] })
+      expect(request.groups[0].targetWords).toBeGreaterThan(request.groups[1].targetWords)
+      return claude({ reports: [
+        { ...draft.sections[0], groupId: 1, citations: ['S1'] },
+        { ...draft.sections[0], groupId: 2, citations: ['S1'] },
+      ] })
+    })
+    const report = await generateReport(integrate, [
+      { category: 'Science', focus: ['Satellites'] }, { category: 'Technology', focus: ['AI'] }, { category: 'Gaming', focus: [] },
+    ], () => {})
+    expect(report.sections.map(({ categories }) => categories)).toEqual([['Science', 'Technology']])
+    expect(integrate.mock.calls[1][1].query).toMatch(/Science.*Satellites.*Technology.*AI/)
+  })
+
+  it('refuses a plan that drops preferences before buying search results', async () => {
+    const integrate = vi.fn(async () => claude({ groups: [['Music']] }))
+    await expect(generateReport(integrate, [{ category: 'Music', focus: [] }, { category: 'Sports', focus: [] }], () => {}))
+      .rejects.toThrow('valid set of report topics')
+    expect(integrate).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a verified story when another group has an invalid draft', async () => {
+    const integrate = vi.fn(async (endpoint: string, input: Record<string, unknown>) => {
+      if (endpoint === 'exa/search') return { results: [source] }
+      const request = JSON.parse((input.messages as { content: string }[])[0].content)
+      if (Array.isArray(request)) return claude({ groups: [['Science'], ['Music']] })
+      return claude({ reports: [
+        { ...draft.sections[0], groupId: 1 },
+        { ...draft.sections[0], groupId: 2, text: 'x'.repeat(4001), citations: ['S2'] },
+      ] })
+    })
+    const report = await generateReport(integrate, [
+      { category: 'Science', focus: [] }, { category: 'Music', focus: [] },
+    ], () => {})
+    expect(report.sections.map(({ category }) => category)).toEqual(['Science'])
+    expect(report.sources.map(({ id }) => id)).toEqual(['S1'])
+  })
+
+  it('accepts a numeric-string group ID and an omitted summary without weakening citations', async () => {
+    const integrate = async (endpoint: string) => endpoint === 'exa/search'
+      ? { results: [source] }
+      : claude({ reports: [{ groupId: '1', heading: 'Ocean research', text: excerpt, citations: ['S1'] }] })
+    const report = await generateReport(integrate, [{ category: 'Science', focus: [] }], () => {})
+    expect(report.sections[0]).toMatchObject({ category: 'Science', citations: ['S1'] })
   })
 
   it('preserves older interest profiles and maps them into categories', () => {

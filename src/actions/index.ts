@@ -3,13 +3,14 @@ import type { Env } from '../../worker'
 import { interestsSchema } from '../lib/interests'
 import { readStored } from '../lib/briefing'
 import { deleteSignalAccount, getProfileDetails, saveProfileDetails } from './account'
-import { getBriefing, startBriefing } from './briefings'
+import { getBriefing, listReportEditions, startBriefing } from './briefings'
 
 export const actions: Record<string, ActionHandler<Env>> = {
   deleteSignalAccount,
   getProfileDetails,
   saveProfileDetails,
   getBriefing,
+  listReportEditions,
   startBriefing,
   getInterests: async ({ tools, userId }) => {
     const result = await tools.get<{ interests: string }>('profiles', userId)

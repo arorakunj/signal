@@ -10,11 +10,12 @@ const SidebarContext = createContext<{
   expanded: boolean
   mobileOpen: boolean
   setMobileOpen: (open: boolean) => void
+  collapse: () => void
   toggle: () => void
   setHovered: (hovered: boolean) => void
 } | null>(null)
 
-function useSidebar() {
+export function useSidebar() {
   const sidebar = useContext(SidebarContext)
   if (!sidebar) throw new Error('Sidebar controls require a Sidebar provider.')
   return sidebar
@@ -39,6 +40,11 @@ export function Sidebar({ children }: { children: ReactNode }) {
       mobileOpen,
       setMobileOpen,
       setHovered,
+      collapse: () => {
+        setPinned(false)
+        setHovered(false)
+        setMobileOpen(false)
+      },
       toggle: () => {
         setPinned(!(pinned || hovered))
         setHovered(false)
@@ -95,11 +101,11 @@ export function SidebarBody({ children }: { children: ReactNode }) {
 }
 
 export function SidebarLink({ to, label, icon }: { to: string; label: string; icon: ReactNode }) {
-  const { setMobileOpen } = useSidebar()
+  const { collapse } = useSidebar()
   return (
-    <NavLink to={to} aria-label={label} title={label} onClick={() => setMobileOpen(false)}
+    <NavLink to={to} aria-label={label} title={label} onClick={collapse}
       className={({ isActive }) => cn(
-        'flex min-h-12 items-center gap-3 rounded-lg px-3 text-base font-semibold',
+        'flex min-h-13 items-center gap-3 rounded-lg px-3 text-lg font-semibold',
         'group-data-[expanded=false]/sidebar:justify-center group-data-[expanded=false]/sidebar:px-0',
         isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
       )}>

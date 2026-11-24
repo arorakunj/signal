@@ -20,6 +20,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { DeepSpaceAuthProvider, useAuthStatus } from 'deepspace'
 import { RecordProvider, RecordScope, AgentTools } from 'deepspace'
 import AppSidebar from '../../components/AppSidebar'
+import { Sidebar, useSidebar } from '@/components/ui/sidebar'
 import Navigation from '../../components/Navigation'
 import { useToast } from '@/components/ui'
 import { APP_NAME, SCOPE_ID } from '../../constants'
@@ -32,7 +33,7 @@ export default function AppLayout() {
           when <Seo> unmounts, so every route without <Seo> sets its own. */}
       <title>{APP_NAME}</title>
       <AuthBoot>
-        <AppShell />
+        <Sidebar><AppShell /></Sidebar>
       </AuthBoot>
     </DeepSpaceAuthProvider>
   )
@@ -40,6 +41,7 @@ export default function AppLayout() {
 
 function AppShell() {
   const { isSignedIn } = useAuthStatus()
+  const { collapse } = useSidebar()
   const { pathname } = useLocation()
   const content = useRef<HTMLElement>(null)
 
@@ -50,7 +52,9 @@ function AppShell() {
   return (
     <div className={`flex h-dvh min-h-0 flex-col overflow-hidden bg-background ${isSignedIn ? 'md:flex-row' : ''}`}>
       {isSignedIn ? <AppSidebar /> : <Navigation />}
-      <main ref={content} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+      <main ref={content} onClickCapture={(event) => {
+        if (isSignedIn && event.target instanceof Element && event.target.closest('button, a[href], summary, [role="button"]')) collapse()
+      }} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
         <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground">Loading…</div>}>
           <Outlet />
         </Suspense>

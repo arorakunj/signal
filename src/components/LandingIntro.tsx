@@ -28,10 +28,10 @@ export default function LandingIntro() {
 
   return (
     <section className="flex flex-col items-center px-6 pb-8 pt-6 text-center sm:pb-10 sm:pt-10">
-      <h1 className="landing-wordmark text-[clamp(5rem,13vw,10rem)] leading-[0.85]">
+      <h1 className="landing-wordmark text-[clamp(5.125rem,13.25vw,10.125rem)] leading-[0.85]">
         <TextTypewriter play={play} duration={0.65}>signal.</TextTypewriter>
       </h1>
-      <p className="mt-6 max-w-full font-newsreader text-[clamp(1.8rem,5vw,3.75rem)] italic leading-tight tracking-tight sm:mt-8">
+      <p className="mt-6 max-w-full font-newsreader text-[clamp(1.875rem,5.1vw,3.875rem)] italic leading-tight tracking-tight sm:mt-8">
         <TextTypewriter play={play} duration={1.6} delay={0.78} onComplete={revealCopy}>
           Stay curious. Stay informed.
         </TextTypewriter>

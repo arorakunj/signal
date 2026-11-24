@@ -1,4 +1,6 @@
 import { appFiles, buildCronContext, JobRoom, RECORD_NOT_FOUND, type Job, type JobContext } from 'deepspace/worker'
+import { z } from 'zod'
+import { editionDay } from '../lib/edition'
 import type { Env } from '../../worker'
 import { briefingRequest, runJob } from '../jobs'
 
@@ -21,12 +23,14 @@ export class BriefingRoom extends JobRoom<Env> {
   }
 
   private latest(reader: string, kind: string): Run | null {
-    const run = this.sql.exec<Run>(
-      'SELECT status, message, started, request_key FROM signal_runs WHERE reader = ? AND kind = ? ORDER BY started DESC, rowid DESC LIMIT 1',
+    const run = this.sql.exec<Run & { job_status: string | null }>(
+      `SELECT r.status, r.message, r.started, r.request_key, j.status AS job_status
+       FROM signal_runs r LEFT JOIN jobs j ON j.id = r.id
+       WHERE r.reader = ? AND r.kind = ? ORDER BY r.started DESC, r.rowid DESC LIMIT 1`,
       reader, kind,
     ).toArray()[0]
-    if (run && ['queued', 'running'].includes(run.status) && Date.now() - run.started > 20 * 60_000) {
-      return { ...run, status: 'failed', message: 'Generation timed out. You can try again.' }
+    if (run && ['queued', 'running'].includes(run.status) && !['queued', 'running'].includes(run.job_status ?? '')) {
+      return { ...run, status: 'failed', message: 'Generation was interrupted. You can try again.' }
     }
     return run ?? null
   }
@@ -39,10 +43,10 @@ export class BriefingRoom extends JobRoom<Env> {
     if (this.deleting.has(reader)) {
       return Response.json({ success: false, error: 'Account deletion is already in progress.' })
     }
-    const pending = ['report', 'podcast'].some((kind) => {
-      const run = this.latest(reader, kind)
-      return run?.status === 'queued' || run?.status === 'running'
-    })
+    const pending = this.sql.exec(
+      `SELECT r.id FROM signal_runs r JOIN jobs j ON j.id = r.id
+       WHERE r.reader = ? AND j.status IN ('queued', 'running') LIMIT 1`, reader,
+    ).toArray().length > 0
     if (pending) {
       return Response.json({ success: false, error: 'Wait for your current briefing to finish, then try again.' })
     }
@@ -60,6 +64,13 @@ export class BriefingRoom extends JobRoom<Env> {
       for (const key of keys) await files.delete(key)
 
       const { records } = buildCronContext(this.env, this.env.OWNER_USER_ID, `app:${this.env.DEEPSPACE_APP_ID}`)
+      for (const collection of ['reportEditions', 'podcastEpisodes']) {
+        for (;;) {
+          const rows = await records.query(collection, { where: { userId: reader }, limit: 50 })
+          for (const row of rows) await records.delete(collection, z.object({ recordId: z.string() }).parse(row).recordId)
+          if (rows.length < 50) break
+        }
+      }
       for (const collection of ['briefings', 'profiles']) {
         try {
           await records.delete(collection, reader)
@@ -103,30 +114,36 @@ export class BriefingRoom extends JobRoom<Env> {
     if (this.deleting.has(payload.userId)) {
       return Response.json({ success: false, error: 'Account deletion is in progress.' })
     }
+    const edition = editionDay()
     const requestKey = payload.kind === 'report'
-      ? `top-picks-v1:${JSON.stringify(payload.topics)}`
+      ? `daily-reports-5am:${edition}`
       : payload.report.id
     const now = Date.now()
     const day = Math.floor(now / 86_400_000) * 86_400_000
     this.sql.exec('DELETE FROM signal_runs WHERE started < ?', day - 86_400_000)
     const existing = this.latest(payload.userId, payload.kind)
-    if (existing && (['queued', 'running'].includes(existing.status) || (existing.status === 'succeeded' && existing.started >= day && existing.request_key === requestKey))) {
+    if (existing && (['queued', 'running'].includes(existing.status) || (existing.status === 'succeeded' && (payload.kind === 'report' || existing.started >= day) && existing.request_key === requestKey))) {
       return Response.json({ success: true, data: { status: existing.status, message: existing.message } })
     }
 
-    const count = this.sql.exec<{ count: number }>(
-      'SELECT count(*) AS count FROM signal_runs WHERE reader = ? AND kind = ? AND started >= ?',
+    const usage = this.sql.exec<{ attempts: number; failures: number }>(
+      `SELECT count(*) AS attempts, count(CASE WHEN status = 'failed' THEN 1 END) AS failures
+       FROM signal_runs WHERE reader = ? AND kind = ? AND started >= ?`,
       payload.userId, payload.kind, day,
-    ).one().count
+    ).one()
     const total = this.sql.exec<{ count: number }>(
       'SELECT count(*) AS count FROM signal_runs WHERE started >= ?', day,
     ).one().count
-    if (count >= 2 || total >= 20) {
-      return Response.json({ success: false, error: 'The generation limit for today was reached. Try again tomorrow (UTC).' }, { status: 429 })
+    const readerLimit = usage.failures > 0 ? 3 : 2
+    if (usage.attempts >= readerLimit || total >= 20) {
+      const message = total >= 20
+        ? 'Signal has reached its shared generation limit. Try again after midnight UTC.'
+        : `You’ve used today’s ${payload.kind === 'report' ? 'story' : 'podcast'} generation attempts. Try again after midnight UTC.`
+      return Response.json({ success: false, error: message }, { status: 429 })
     }
 
-    const job = this.enqueue(payload.kind, payload, { enqueuedBy: payload.userId, maxAttempts: 1 })
-    const message = payload.kind === 'report' ? 'Top picks queued…' : 'Podcast queued…'
+    const job = this.enqueue(payload.kind, payload.kind === 'report' ? { ...payload, edition } : payload, { enqueuedBy: payload.userId, maxAttempts: 1 })
+    const message = payload.kind === 'report' ? 'Daily reports queued…' : 'Podcast queued…'
     this.sql.exec(
       'INSERT INTO signal_runs (id, reader, kind, started, status, message, request_key) VALUES (?, ?, ?, ?, ?, ?, ?)',
       job.id, payload.userId, payload.kind, now, 'queued', message, requestKey,
@@ -141,16 +158,30 @@ export class BriefingRoom extends JobRoom<Env> {
     // Only server-reserved jobs may spend credits, even if another caller can enqueue internally.
     const reservation = this.sql.exec<{ status: string }>('SELECT status FROM signal_runs WHERE id = ?', job.id).toArray()[0]
     if (reservation?.status !== 'queued') throw new Error('Missing briefing reservation.')
-    update('running', 'Preparing the briefing…')
+    let stage = 'Preparing the briefing…'
+    update('running', stage)
     try {
-      await runJob(job, context, this.env, (message) => update('running', message))
+      await runJob(job, context, this.env, (message) => {
+        stage = message
+        update('running', stage)
+      })
       update('succeeded', 'Ready.')
     } catch (error) {
       const detail = error instanceof Error ? error.message : ''
-      const safe = /^(No usable coverage|No verified picks|The draft cited|Claude did not|The generated script|ElevenLabs returned)/.test(detail)
-      const message = safe ? detail : /insufficient|credits/i.test(detail)
-        ? 'Generation needs more DeepSpace integration credits.'
-        : 'Generation failed. Try again later.'
+      const safe = /^(No usable coverage|No verified reports|Save your interests|The draft cited|Claude did not|The generated script|ElevenLabs returned)/.test(detail)
+      const provider = /^Integration call (exa|anthropic|elevenlabs)\//.exec(detail)?.[1]
+      const service = { exa: 'Exa search', anthropic: 'Claude', elevenlabs: 'ElevenLabs' }[provider ?? '']
+      const needsCredits = /insufficient|credits/i.test(detail)
+      let message = 'Generation failed. Try again later.'
+      if (safe) message = detail
+      else if (needsCredits) message = 'Generation needs more DeepSpace integration credits.'
+      else if (service) message = `${service} could not complete generation. Try again later.`
+
+      console.error('[signal] Briefing failed', {
+        kind: job.type, stage, provider, needsCredits,
+        validation: error instanceof z.ZodError ? error.issues.map(({ code, path }) => ({ code, path })) : undefined,
+        reason: safe ? detail : undefined,
+      })
       update('failed', message)
       throw new Error(message)
     }

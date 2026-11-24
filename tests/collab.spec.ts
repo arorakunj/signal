@@ -241,31 +241,51 @@ test('the OAuth return can reach interest review using a loopback session cookie
   await expect(page.getByRole('heading', { name: 'Your feed' })).toBeVisible()
 })
 
-test('top picks filter independently from the protected podcast page', async ({ users }) => {
+test('daily reports filter independently from the protected podcast page', async ({ users }) => {
   const [{ page }] = await users(1)
+  const report = {
+    id: 'test-report', title: 'Daily reports', summary: 'Music and Science', createdAt: '2026-11-23T12:00:00Z',
+    sections: [
+      { category: 'Music', categories: ['Music', 'Entertainment'], heading: 'A jazz world tour', summary: 'New tour dates.', text: 'A jazz tour was announced.', citations: ['S1'] },
+      { category: 'Science', heading: 'New lunar data', summary: 'New lunar data.', text: 'Researchers published lunar data.', citations: ['S2'] },
+    ],
+    sources: [
+      { id: 'S1', title: 'Tour coverage', url: 'https://example.org/tour', publisher: 'example.org', publishedAt: null },
+      { id: 'S2', title: 'Lunar coverage', url: 'https://example.org/moon', publisher: 'example.org', publishedAt: null },
+    ],
+  }
+  let generated = false
+  let requests = 0
   await page.route('**/api/actions/getBriefing', (route) => route.fulfill({ json: {
     success: true,
     data: {
-      report: null, podcast: null, latestPodcast: null,
-      latestReport: {
-        id: 'test-report', title: 'Top picks', summary: 'Music and Science', createdAt: '2026-11-23T12:00:00Z',
-        sections: [
-          { category: 'Music', heading: 'A jazz world tour', summary: 'New tour dates.', text: 'A jazz tour was announced.', citations: ['S1'] },
-          { category: 'Science', heading: 'New lunar data', summary: 'New lunar data.', text: 'Researchers published lunar data.', citations: ['S2'] },
-        ],
-        sources: [
-          { id: 'S1', title: 'Tour coverage', url: 'https://example.org/tour', publisher: 'example.org', publishedAt: null },
-          { id: 'S2', title: 'Lunar coverage', url: 'https://example.org/moon', publisher: 'example.org', publishedAt: null },
-        ],
-      },
+      report: requests === 2 ? { status: 'failed', message: 'Story generation failed in the background.' } : null,
+      podcast: null, latestPodcast: null, latestReport: generated ? report : null, todayReport: generated ? report : null,
     },
   } }))
+  await page.route('**/api/actions/startBriefing', (route) => {
+    expect(route.request().postDataJSON()).toEqual({ kind: 'report' })
+    if (++requests === 1) return route.fulfill({ json: { success: false, error: 'Claude could not complete generation.' } })
+    generated = requests === 3
+    return route.fulfill({ json: { success: true, data: { status: 'queued' } } })
+  })
   await page.goto('/feed')
-  await expect(page.getByRole('heading', { name: 'Top picks for you today' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Today’s reports' })).toBeVisible()
   const picks = page.getByRole('region', { name: 'Your briefing' })
+  await picks.getByRole('button', { name: 'Generate stories' }).click()
+  await expect(page.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false')
+  await expect(picks.getByRole('alert')).toContainText('Claude could not complete generation.')
+  await expect(picks.getByRole('button', { name: 'Refresh status' })).toHaveCount(0)
+  await picks.getByRole('button', { name: 'Generate stories' }).click()
+  await expect(picks.getByRole('alert')).toContainText('Story generation failed in the background.')
+  await page.reload()
+  await expect(picks.getByRole('button', { name: 'Generate stories' })).toBeEnabled()
+  await expect(picks.getByRole('alert')).toHaveCount(0)
+  await picks.getByRole('button', { name: 'Generate stories' }).click()
+  await expect(picks.getByRole('button', { name: 'Generate stories' })).toBeDisabled()
   await expect(picks.getByRole('heading', { name: 'A jazz world tour' })).toBeVisible()
   await expect(picks.getByRole('heading', { name: 'New lunar data' })).toBeVisible()
-  await picks.getByRole('button', { name: 'Music', exact: true }).click()
+  await picks.getByRole('button', { name: 'Entertainment', exact: true }).click()
   await expect(picks.getByRole('heading', { name: 'A jazz world tour' })).toBeVisible()
   await expect(picks.getByRole('heading', { name: 'New lunar data' })).toHaveCount(0)
   await expect(picks.getByRole('button', { name: 'Generate podcast' })).toHaveCount(0)
@@ -273,7 +293,57 @@ test('top picks filter independently from the protected podcast page', async ({ 
   await expect(page).toHaveURL(/\/podcasts$/)
   await expect(page.getByRole('heading', { name: 'Podcasts' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Generate podcast' })).toBeEnabled()
-  await expect(page.getByRole('button', { name: 'Generate top picks' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Generate stories' })).toHaveCount(0)
+  const archiveResponse = page.waitForResponse('**/api/actions/listReportEditions')
+  await page.getByRole('link', { name: 'Story archive' }).click()
+  await expect(page).toHaveURL(/\/archive$/)
+  await expect(page.getByRole('heading', { name: 'Story archive' })).toBeVisible()
+  expect(await (await archiveResponse).json()).toMatchObject({ success: true })
+
+  await page.route('**/api/actions/listReportEditions', (route) => route.fulfill({
+    json: { success: true, data: {
+      reports: [
+        { edition: '2026-11-24', report: { ...report, id: 'next-day', sections: [
+          { ...report.sections[0], heading: 'The next day’s report' },
+        ] } },
+        { edition: '2026-11-23', report },
+      ],
+      podcasts: ['Episode one', 'Episode two'].map((title, index) => ({
+        publishedAt: '2026-11-23T12:00:00Z',
+        podcast: { reportId: report.id, title, transcript: 'Test transcript', audioKey: `audio-${index}`,
+          audioPath: `/api/files/episode-${index}.mp3`, sources: report.sources },
+      })),
+      pending: false,
+    } },
+  }))
+  await page.clock.setFixedTime(new Date('2026-11-24T11:59:00Z'))
+  await page.reload()
+  const archiveDate = page.getByLabel('Archive date')
+  await expect(archiveDate).toHaveValue('2026-11-24')
+  await expect(page.getByRole('heading', { name: 'The next day’s report' })).toBeVisible()
+  await archiveDate.fill('2026-11-23')
+  await expect(page.getByRole('heading', { name: 'A jazz world tour' })).toBeVisible()
+  await page.getByRole('article').filter({ hasText: 'A jazz world tour' }).getByText('Read story and sources').click()
+  await expect(page.getByRole('link', { name: /^Tour coverage$/ }).last()).toHaveAttribute('href', 'https://example.org/tour')
+
+  await expect(page.locator('main time')).toHaveText('Monday, November 23, 2026')
+  await page.getByRole('button', { name: 'Next day' }).click()
+  await expect(page.locator('main time')).toHaveText('Tuesday, November 24, 2026')
+  await expect(page.getByRole('heading', { name: 'A jazz world tour' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'The next day’s report' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Episode one' })).toHaveCount(0)
+  const otherMonth = page.waitForRequest((request) =>
+    request.url().endsWith('/api/actions/listReportEditions') && request.postDataJSON().month === '2025-10')
+  await archiveDate.fill('2025-10-12')
+  await otherMonth
+  await expect(page.getByText('No stories on this date.')).toBeVisible()
+  await page.getByRole('link', { name: 'Podcasts' }).click()
+  await expect(page.getByText('No podcasts on this date.')).toBeVisible()
+  await archiveDate.fill('2026-11-23')
+  await expect(page.getByRole('heading', { name: 'Episode one' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Episode two' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'The next day’s report' })).toHaveCount(0)
+
 })
 
 test('profile fields persist and deletion requires explicit confirmation', async ({ users }) => {
@@ -336,7 +406,10 @@ test('app pages align their headings and show comma-separated interest specifics
   await page.route('**/api/actions/getInterests', (route) => route.fulfill({
     json: { success: true, data: [{ category: 'Gaming', focus: ['GTA VI', 'Fortnite'] }] },
   }))
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/feed')
+  await page.getByRole('button', { name: 'Collapse sidebar' }).press('Enter')
+  await expect.poll(async () => (await page.getByRole('complementary').boundingBox())?.width).toBe(64)
   const heading = await page.getByRole('heading', { name: 'Your feed' }).boundingBox()
   await expect(page.getByRole('list', { name: 'Your interests' })).toContainText('GTA VI, Fortnite')
   for (const title of ['Podcasts', 'Settings']) {

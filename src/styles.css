@@ -28,6 +28,16 @@
 }
 
 @theme {
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 1.0625rem;
+  --text-lg: 1.1875rem;
+  --text-xl: 1.3125rem;
+  --text-2xl: 1.5625rem;
+  --text-3xl: 1.9375rem;
+  --text-4xl: 2.3125rem;
+  --text-5xl: 3.125rem;
+  --text-6xl: 3.875rem;
 
   /* shadcn core tokens — slate (default): neutral gray on near-black, indigo accent */
   --color-background: #0a0a0a;
@@ -183,7 +193,7 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-size: 14px;
+    font-size: 0.9375rem;
     color: var(--color-foreground);
   }
 
