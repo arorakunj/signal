@@ -4,6 +4,8 @@
 
 Signal turns a reader’s interests into a short, source-backed news briefing and a single-narrator podcast. It was built for the DeepSpace Software Engineering Internship assessment.
 
+**[Open the live Signal app](https://signal.app.space)**
+
 ## Try the core flow
 
 1. Sign in through DeepSpace Auth. On your first visit, choose broad interests such as Music, Science, or Gaming. Add optional specifics like “hip-hop,” “space missions,” or “GTA VI.”
@@ -115,15 +117,14 @@ npx deepspace deploy
 
 Use the URL printed by the CLI for the assessment submission. A GitHub push updates the repository. The DeepSpace deployment command publishes the local checkout and provisions the Worker bindings. For a GitHub-sourced app, deploy from a clean, pushed checkout so the release corresponds to what reviewers see in the repository. An unclaimed app’s first deploy can latch the selected GitHub remote as its source, while an existing app keeps its configured source. [DeepSpace source control](https://docs.deep.space/guides/source-control.md)
 
-Vercel can serve browser assets, but Signal’s full-stack Worker depends on Cloudflare Durable Object bindings and DeepSpace’s platform services. The Vite build separates the frontend into `dist/client` and the Worker into `dist/signal`. Serving `dist/client` alone omits the authenticated API, job queue, database, and private audio routes. The Worker build directory can contain a generated `.dev.vars`; keep it private. Use the DeepSpace-hosted URL for the whole app. [Cloudflare Durable Object bindings](https://developers.cloudflare.com/durable-objects/get-started/)
-
 ### Production smoke test
 
 1. Open the published URL in a private window. Confirm direct navigation to `/feed`, `/archive`, `/podcasts`, and `/settings` requires sign-in.
 2. Sign in with a test reader, save interests, reload, and confirm they persist. Generate one story edition and check the original source links.
 3. Open **Story archive** and select the date of that edition. Generate one podcast and confirm playback, transcript, and sources. Reload and confirm both the edition and episode remain available.
 4. With a second test reader, check that their account cannot see the first reader’s archive or fetch the first reader’s private audio URL.
-5. Record only the checks actually performed in the portal note. One story run and one podcast run are sufficient for the production smoke test and consume live integration credits.
+
+One story run and one podcast run are sufficient for the production smoke test and consume live integration credits.
 
 ## Code map
 
