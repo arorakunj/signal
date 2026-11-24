@@ -23,7 +23,8 @@ import AppSidebar from '../../components/AppSidebar'
 import { Sidebar, useSidebar } from '@/components/ui/sidebar'
 import Navigation from '../../components/Navigation'
 import { useToast } from '@/components/ui'
-import { APP_NAME, SCOPE_ID } from '../../constants'
+import { SCOPE_ID } from '../../constants'
+import { seo } from '../../seo'
 import { schemas } from '../../schemas'
 
 export default function AppLayout() {
@@ -31,7 +32,7 @@ export default function AppLayout() {
     <DeepSpaceAuthProvider>
       {/* The prerendered landing owns the document <title> and React drops it
           when <Seo> unmounts, so every route without <Seo> sets its own. */}
-      <title>{APP_NAME}</title>
+      <title>{seo.title}</title>
       <AuthBoot>
         <Sidebar><AppShell /></Sidebar>
       </AuthBoot>

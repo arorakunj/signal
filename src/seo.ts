@@ -23,7 +23,7 @@
 declare const __DEEPSPACE_SITE_ORIGIN__: string | undefined
 
 export const seo = {
-  title: 'Signal | Personalized news and podcasts',
+  title: 'Signal.',
   description: 'Follow your interests with source-backed stories and a personalized daily podcast.',
   /** Public origin for canonical URLs, og:url, and the sitemap — no trailing
    *  slash. Replace with the custom domain once one is attached, e.g.

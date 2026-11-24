@@ -70,7 +70,7 @@ export function SidebarBody({ children }: { children: ReactNode }) {
         data-expanded={expanded}
       >
         <div className={cn('flex h-16 shrink-0 items-center gap-2 border-b border-border px-3', !expanded && 'justify-center')}>
-          {expanded && <span className="min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.055em] text-black">signal.</span>}
+          {expanded && <span className="min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.055em] text-black">Signal.</span>}
           <button type="button" onClick={toggle} className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-primary"
             aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'} aria-expanded={expanded}>
             {expanded ? <PanelLeftClose size={18} aria-hidden /> : <PanelLeftOpen size={18} aria-hidden />}
@@ -79,7 +79,7 @@ export function SidebarBody({ children }: { children: ReactNode }) {
         {children}
       </motion.aside>
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4 md:hidden">
-        <span className="text-2xl font-semibold tracking-[-0.055em] text-black">signal.</span>
+        <span className="text-2xl font-semibold tracking-[-0.055em] text-black">Signal.</span>
         <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
           <DialogTrigger render={
             <button type="button" aria-label="Open navigation"
@@ -89,7 +89,7 @@ export function SidebarBody({ children }: { children: ReactNode }) {
           } />
           <DialogContent className="!left-0 !top-0 !h-dvh !w-[min(20rem,90vw)] !max-w-none !translate-x-0 !translate-y-0 !flex !flex-col !gap-0 !rounded-none !border-0 !border-r !p-0">
             <DialogTitle className="flex h-16 shrink-0 items-center border-b border-border px-5 text-2xl font-semibold tracking-[-0.055em] text-black">
-              <span aria-hidden="true">signal.</span>
+              <span aria-hidden="true">Signal.</span>
               <span className="sr-only">App navigation</span>
             </DialogTitle>
             {children}

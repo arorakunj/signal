@@ -77,7 +77,6 @@ Manual, bounded generation keeps the core flow easy to demonstrate, caps idle sp
 - The Feed can return fewer than three reports. Sparse coverage, provider errors, and exhausted credits can prevent an edition or episode from being generated.
 - An older release only retained the most recent podcast’s metadata. New episodes have independent archive records. Previously overwritten metadata is outside the current archive.
 - Editorial sizing and source links were prioritized over article imagery, separate article permalink routes, bookmarks, and automated delivery. A next step would be evaluating topical relevance and claim-level sourcing using a small, reviewed set of real editions.
-- The StoryNest sample informed the choice to use native background jobs and store generated audio independently. Signal’s product, prompts, and interface are its own. [StoryNest reference](https://github.com/deepdotspace/storynest)
 
 ## Local development
 
@@ -137,13 +136,3 @@ Vercel can serve browser assets, but Signal’s full-stack Worker depends on Clo
 | `src/server/briefing-pipeline.ts`, `src/lib/briefing.ts` | Integrations, prompts, source rules, and runtime schemas |
 | `src/lib/edition.ts`, `src/schemas/` | Date boundaries and collection definitions |
 | `tests/`, `src/**/*.test.ts` | Browser, API, and unit regression coverage |
-
-## Assessment handoff
-
-**Applicant direction and review.** The applicant chose the product scope and editorial direction, reviewed the landing and signed-in flows interactively, and reported issues in sign-in routing, interest persistence, generation feedback, sidebar behavior, and archive dates. That review drove the switch to manual generation and the date-picker archive. The production smoke-test checklist above is for the applicant to complete and record before claiming live verification.
-
-**Coding agent work.** Codex implemented the UI and Worker changes, wired DeepSpace Auth, records, jobs, and file storage, added the integration pipeline and citation validation, and wrote and ran automated checks. Unit tests cover grouping, citation validity, empty evidence, archival persistence and date boundaries. Browser tests cover routes, account isolation, onboarding, sidebar behavior, and archive filtering. Browser tests use fixtures for generated content. The agent also ran a separate live local story generation during debugging. The live smoke test should confirm the deployed revision, including podcast playback.
-
-**Portal note draft.**
-
-I built Signal, a personalized news briefing and podcast app on DeepSpace. Exa retrieves current sources, Claude groups interests and writes cited reports and scripts, and ElevenLabs generates narration. My main tradeoff was choosing manual, bounded generation with durable jobs over scheduled delivery, so the core workflow is easy to try and spending is predictable. I directed Codex’s implementation and iterated on the UI and error handling through hands-on review. For the deployed version, I personally verified **[list only the checks actually completed]**. Live URL **[paste the DeepSpace deployment URL]**. Repository **[arorakunj/signal](https://github.com/arorakunj/signal)**.

@@ -229,7 +229,7 @@ test('the intro types once per document and reveals the supporting copy afterwar
   await page.goto('/')
   const copy = page.locator('[data-intro-copy]')
   const typing = page.locator('[data-typing="true"]')
-  await expect(page.getByRole('heading', { name: 'signal.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Signal.', exact: true })).toBeVisible()
   await expect(typing).toHaveCount(2)
   await expect(copy).toHaveCSS('opacity', '0')
   await expect(typing).toHaveCount(0)
@@ -237,6 +237,8 @@ test('the intro types once per document and reveals the supporting copy afterwar
 
   await page.getByRole('link', { name: 'Choose your interests' }).first().click()
   await expect(page).toHaveURL(/\/sign-in$/)
+  await expect(page).toHaveTitle('Signal.')
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/signal-mark.ico')
   await page.goBack()
   await expect(copy).toHaveCSS('opacity', '1')
   await expect(typing).toHaveCount(0)
@@ -251,6 +253,14 @@ test('reduced motion skips the intro and the hero and footer share a wordmark st
   await page.goto('/')
   await expect(page.locator('[data-typing="true"]')).toHaveCount(0)
   await expect(page.locator('[data-intro-copy]')).toHaveCSS('opacity', '1')
+  await expect(page).toHaveTitle('Signal.')
+  const icon = page.locator('link[rel="icon"]')
+  await expect(icon).toHaveAttribute('href', '/signal-mark.ico')
+  const favicon = await page.request.get('/signal-mark.ico')
+  expect(favicon.ok()).toBeTruthy()
+  expect((await favicon.body()).subarray(0, 4)).toEqual(Buffer.from([0, 0, 1, 0]))
+  await expect(page.getByRole('heading', { name: 'Signal.', exact: true })).toBeVisible()
+  await expect(page.locator('footer .landing-wordmark')).toHaveText('Signal.')
   const wordmarks = await page.locator('.landing-wordmark').evaluateAll(items =>
     items.map(item => {
       const { fontFamily, fontWeight, color } = getComputedStyle(item)

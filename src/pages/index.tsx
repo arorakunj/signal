@@ -60,7 +60,7 @@ export default function Landing() {
         <footer className="border-t border-signal-border bg-[#EAEFE8]">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:gap-10 sm:px-10">
             <div className="flex shrink-0 items-baseline gap-3">
-              <p className="landing-wordmark text-2xl">signal.</p>
+              <p className="landing-wordmark text-2xl">Signal.</p>
               <p className="font-mono text-xs tracking-[0.12em] text-signal-ink/65">© 2026</p>
             </div>
             <div className="max-w-sm text-sm leading-relaxed text-signal-ink/75">
