@@ -11,19 +11,17 @@ import {
   armCronRoom,
   CanvasRoom,
   CronRoom,
-  JobRoom,
   PresenceRoom,
   RecordRoom,
-  resolveAppRole,
   workerErrorHandler,
   YjsRoom,
 } from 'deepspace/worker'
-import type { DOBindings, DOManifest, Job, JobContext } from 'deepspace/worker'
+import type { DOBindings, DOManifest } from 'deepspace/worker'
 import { AI_CHATS_SCHEMA } from 'deepspace/schema'
 import { registerAgent } from './src/ai/agent.js'
 import { buildTools } from './src/ai/tools.js'
 import { tasks as cronTasks, runTask as runCronTask } from './src/cron.js'
-import { runJob } from './src/jobs.js'
+import { BriefingRoom } from './src/server/briefing-room.js'
 import { schemas } from './src/schemas.js'
 import { registerActionRoutes } from './src/server/action-routes.js'
 import {
@@ -65,22 +63,7 @@ export class AppCronRoom extends CronRoom<Env> {
   }
 }
 
-/** Runs durable background work defined in src/jobs.ts. */
-export class AppJobRoom extends JobRoom<Env> {
-  constructor(state: DurableObjectState, env: Env) {
-    super(state, env, {
-      authorizeWrite: async (user) => {
-        if (user.userId.startsWith('anon-')) return false
-        const role = await resolveAppRole(env, user.userId)
-        return role === 'member' || role === 'admin'
-      },
-    })
-  }
-
-  protected async onJob(job: Job, context: JobContext): Promise<unknown> {
-    return await runJob(job, context, this.env)
-  }
-}
+export class AppJobRoom extends BriefingRoom {}
 
 export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   ASSETS: Fetcher

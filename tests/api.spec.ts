@@ -16,3 +16,27 @@ test.describe('API tests', () => {
     // If the app loaded and connected, the WS endpoint works
   })
 })
+
+test('an incomplete OAuth callback returns an explicit sign-in error', async ({ request }) => {
+  const response = await request.get('/api/auth/oauth-complete', { maxRedirects: 0 })
+  expect(response.status()).toBe(302)
+  expect(response.headers().location).toBe('/sign-in?error=oauth')
+})
+
+test('generation actions require sign-in and paid provider routes stay server-only', async ({ request }) => {
+  for (const action of ['getBriefing', 'startBriefing']) {
+    const response = await request.post(`/api/actions/${action}`, { data: {} })
+    expect(response.status()).toBe(401)
+  }
+  for (const endpoint of ['exa/search', 'anthropic/chat-completion', 'elevenlabs/generate-speech']) {
+    const response = await request.post(`/api/integrations/${endpoint}`, { data: {} })
+    expect(response.status()).toBe(403)
+  }
+})
+
+test('profile and account deletion actions reject anonymous requests', async ({ request }) => {
+  for (const action of ['getProfileDetails', 'saveProfileDetails', 'deleteSignalAccount']) {
+    const response = await request.post(`/api/actions/${action}`, { data: { confirmation: 'DELETE' } })
+    expect(response.status()).toBe(401)
+  }
+})

@@ -1,19 +1,34 @@
 import { getAuthToken } from 'deepspace'
-import { z } from 'zod'
-import { interestsSchema } from './interests'
+import { interestsResponseSchema, type Interest } from './interests'
+import { profileDetailsResponseSchema, type ProfileDetails } from './profile-details'
 
-export async function profileAction(name: 'getInterests' | 'saveInterests', interests?: string[]) {
+async function requestAccountAction(name: string, params: object) {
   const token = await getAuthToken()
   if (!token) throw new Error('Sign in to access your interests.')
   const response = await fetch(`/api/actions/${name}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ interests }),
+    body: JSON.stringify(params),
   })
   const result = await response.json() as { success?: boolean; error?: string; data?: unknown }
-  const data = interestsSchema.or(z.tuple([])).safeParse(result.data)
-  if (!response.ok || !result.success || !data.success) {
-    throw new Error(result.error ?? 'Could not access your interests. Try again.')
+  if (!response.ok || !result.success) {
+    throw new Error(result.error ?? 'Could not update your account. Try again.')
   }
-  return data.data
+  return result.data
+}
+
+export async function profileAction(name: 'getInterests' | 'saveInterests', interests?: Interest[]) {
+  return interestsResponseSchema.parse(await requestAccountAction(name, { interests }))
+}
+
+export async function getProfileDetails() {
+  return profileDetailsResponseSchema.parse(await requestAccountAction('getProfileDetails', {}))
+}
+
+export async function saveProfileDetails(details: ProfileDetails) {
+  return profileDetailsResponseSchema.parse(await requestAccountAction('saveProfileDetails', details))
+}
+
+export async function deleteSignalAccount(confirmation: string) {
+  await requestAccountAction('deleteSignalAccount', { confirmation })
 }

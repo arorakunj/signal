@@ -140,32 +140,39 @@ test('profiles persist after refresh and remain isolated between accounts', asyn
   ]
 
   for (const { page, topic, privateTopic } of scenarios) {
-    await page.goto('/settings')
+    await page.goto('/settings/interests')
     const preset = page.getByRole('button', { name: topic, exact: true })
     await expect(preset).toBeVisible()
     if (await preset.getAttribute('aria-pressed') === 'false') await preset.click()
-    await page.getByLabel('Add your own interest').fill(privateTopic)
-    await page.getByLabel('Add your own interest').press('Enter')
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+    const specifics = page.getByLabel(`Specific interest in ${topic}`)
+    await specifics.fill(privateTopic)
+    await specifics.press('Enter')
     await page.getByRole('button', { name: 'Save interests' }).click()
+    await expect(page).toHaveURL(/\/settings$/)
     await expect(page.getByText('Interests saved.')).toBeVisible()
     await page.goto('/feed')
   }
 
   for (const { page, topic, privateTopic } of scenarios) {
     await page.reload()
-    await expect(page.getByText(topic, { exact: true })).toBeVisible()
-    await expect(page.getByText(privateTopic, { exact: true })).toBeVisible()
+    const interests = page.getByRole('list', { name: 'Your interests' })
+    await expect(interests.getByText(topic, { exact: true })).toBeVisible()
+    await expect(interests.getByText(privateTopic, { exact: true })).toBeVisible()
     const other = scenarios.find((scenario) => scenario.page !== page)!
-    await expect(page.getByText(other.privateTopic, { exact: true })).toHaveCount(0)
+    await expect(interests.getByText(other.privateTopic, { exact: true })).toHaveCount(0)
   }
 
-  await first.page.goto('/settings')
+  await first.page.goto('/settings/interests')
+  await first.page.getByRole('button', { name: 'Continue', exact: true }).click()
   await first.page.getByRole('button', { name: 'Remove Deep sea exploration' }).click()
   await first.page.getByRole('button', { name: 'Save interests' }).click()
+  await expect(first.page).toHaveURL(/\/settings$/)
   await expect(first.page.getByText('Interests saved.')).toBeVisible()
   await first.page.goto('/feed')
-  await expect(first.page.getByText('Science', { exact: true })).toBeVisible()
-  await expect(first.page.getByText('Deep sea exploration', { exact: true })).toHaveCount(0)
+  const savedInterests = first.page.getByRole('list', { name: 'Your interests' })
+  await expect(savedInterests.getByText('Science', { exact: true })).toBeVisible()
+  await expect(savedInterests.getByText('Deep sea exploration', { exact: true })).toHaveCount(0)
 })
 
 test('signed-in readers without interests complete setup before opening the feed', async ({ users }) => {
@@ -180,8 +187,10 @@ test('signed-in readers without interests complete setup before opening the feed
   await page.goto('/home')
   await expect(page.getByRole('heading', { name: 'Choose your interests' })).toBeVisible()
   await page.getByRole('button', { name: 'Science', exact: true }).click()
-  await page.getByLabel('Add your own interest').fill('Planetary geology')
-  await page.getByLabel('Add your own interest').press('Enter')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Anything specific?' })).toBeVisible()
+  await page.getByLabel('Specific interest in Science').fill('Planetary geology')
+  await page.getByLabel('Specific interest in Science').press('Enter')
 
   await page.route('**/api/actions/saveInterests', (route) => route.fulfill({
     json: { success: false, error: 'Could not save your interests.' },
@@ -202,4 +211,91 @@ test('signed-in readers without interests complete setup before opening the feed
   await expect(page).toHaveURL(/\/feed$/)
   await expect(page.getByText('Planetary geology', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Choose your interests' })).toHaveCount(0)
+})
+
+test('the OAuth return can reach interest review using a loopback session cookie', async ({ users }) => {
+  const [{ page, context }] = await users(1)
+  await page.goto('/settings/interests')
+  const science = page.getByRole('button', { name: 'Science', exact: true })
+  await expect(science).toBeVisible()
+  if (await science.getAttribute('aria-pressed') === 'false') await science.click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.getByRole('button', { name: 'Save interests' }).click()
+  await expect(page.getByText('Interests saved.')).toBeVisible()
+
+  const sessionName = '__Secure-better-auth.session_token'
+  const cookies = await context.cookies()
+  const session = cookies.find((cookie) => cookie.name === sessionName)
+  expect(session, 'Test account should have a DeepSpace session cookie').toBeDefined()
+  await context.clearCookies({ name: sessionName })
+  await context.addCookies([{ ...session!, name: 'signal.local-session', secure: false }])
+
+  await page.goto('/home?auth=complete')
+  await expect(page.getByRole('heading', { name: 'Review your interests' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Science', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Continue to feed' }).click()
+  await expect(page).toHaveURL(/\/feed$/)
+  await expect(page.getByRole('heading', { name: 'Your feed' })).toBeVisible()
+})
+
+test('top picks filter independently from the protected podcast page', async ({ users }) => {
+  const [{ page }] = await users(1)
+  await page.route('**/api/actions/getBriefing', (route) => route.fulfill({ json: {
+    success: true,
+    data: {
+      report: null, podcast: null, latestPodcast: null,
+      latestReport: {
+        id: 'test-report', title: 'Top picks', summary: 'Music and Science', createdAt: '2026-11-23T12:00:00Z',
+        sections: [
+          { category: 'Music', heading: 'A jazz world tour', summary: 'New tour dates.', text: 'A jazz tour was announced.', citations: ['S1'] },
+          { category: 'Science', heading: 'New lunar data', summary: 'New lunar data.', text: 'Researchers published lunar data.', citations: ['S2'] },
+        ],
+        sources: [
+          { id: 'S1', title: 'Tour coverage', url: 'https://example.org/tour', publisher: 'example.org', publishedAt: null },
+          { id: 'S2', title: 'Lunar coverage', url: 'https://example.org/moon', publisher: 'example.org', publishedAt: null },
+        ],
+      },
+    },
+  } }))
+  await page.goto('/feed')
+  await expect(page.getByRole('heading', { name: 'Top picks for you today' })).toBeVisible()
+  const picks = page.getByRole('region', { name: 'Your briefing' })
+  await expect(picks.getByRole('heading', { name: 'A jazz world tour' })).toBeVisible()
+  await expect(picks.getByRole('heading', { name: 'New lunar data' })).toBeVisible()
+  await picks.getByRole('button', { name: 'Music', exact: true }).click()
+  await expect(picks.getByRole('heading', { name: 'A jazz world tour' })).toBeVisible()
+  await expect(picks.getByRole('heading', { name: 'New lunar data' })).toHaveCount(0)
+  await expect(picks.getByRole('button', { name: 'Generate podcast' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Podcasts' }).click()
+  await expect(page).toHaveURL(/\/podcasts$/)
+  await expect(page.getByRole('heading', { name: 'Podcasts' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Generate podcast' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Generate top picks' })).toHaveCount(0)
+})
+
+test('profile fields persist and deletion requires explicit confirmation', async ({ users }) => {
+  const [{ page }] = await users(1)
+  await page.goto('/settings')
+  await page.getByRole('link', { name: /^Profile/ }).click()
+  await expect(page).toHaveURL(/\/settings\/profile$/)
+  await page.getByLabel('Display name').fill('Signal Test Editor')
+  await page.getByLabel('Contact email').fill('editor@example.com')
+  await page.getByRole('button', { name: 'Save profile' }).click()
+  await expect(page).toHaveURL(/\/settings$/)
+  await expect(page.getByText('Profile saved.')).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('Signal Test Editor · editor@example.com')).toBeVisible()
+  await page.getByRole('link', { name: /^Profile/ }).click()
+  await expect(page.getByLabel('Display name')).toHaveValue('Signal Test Editor')
+  await expect(page.getByLabel('Contact email')).toHaveValue('editor@example.com')
+  await page.getByRole('link', { name: 'All settings' }).click()
+
+  await page.getByRole('button', { name: 'Delete account' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Delete your Signal account?' })
+  await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeDisabled()
+  await dialog.getByLabel('Type DELETE to confirm').fill('DELETE')
+  await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeEnabled()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('Signal Test Editor · editor@example.com')).toBeVisible()
 })

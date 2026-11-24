@@ -64,6 +64,26 @@ function reassertAppIdentity(headers: Headers, env: Env): void {
   headers.set('x-app-id', env.DEEPSPACE_APP_ID)
 }
 
+// Safari rejects Secure cookies over HTTP even on localhost. Only loopback
+// development uses this alias. DeepSpace always receives its standard name.
+const LOCAL_SESSION_COOKIE = 'signal.local-session'
+
+function isHttpLoopback(url: URL): boolean {
+  return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+}
+
+function authHeaders(request: Request): Headers {
+  const headers = new Headers(request.headers)
+  if (!isHttpLoopback(new URL(request.url))) return headers
+  const cookies = headers.get('Cookie')?.split(';').map((cookie) => cookie.trim()) ?? []
+  const local = cookies.find((cookie) => cookie.startsWith(`${LOCAL_SESSION_COOKIE}=`))
+  if (local) {
+    const remaining = cookies.filter((cookie) => !cookie.startsWith(`${LOCAL_SESSION_COOKIE}=`) && !cookie.startsWith(`${SESSION_COOKIE}=`))
+    headers.set('Cookie', [...remaining, `${SESSION_COOKIE}=${local.slice(LOCAL_SESSION_COOKIE.length + 1)}`].join('; '))
+  }
+  return headers
+}
+
 /** Register auth, debug, and integration routes in their required order. */
 export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
   const nativeAuthOptions = (env: Env): ExpoAuthBridgeOptions => ({
@@ -100,53 +120,47 @@ export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
       return nativeAuthCallback(c.req.raw, c.env, nativeAuthOptions(c.env))
     }
     const code = c.req.query('code')
-    const appOrigin = new URL(c.req.url).origin
-    // Land the signed-in user in the app, not on the static landing. `/` is a
-    // static page (no auth/realtime providers), so redirecting there after auth
-    // would strand the user; `/home` is the dynamic app boundary.
-    const appHome = `${appOrigin}/home`
+    const url = new URL(c.req.url)
+    const failed = () => c.redirect('/sign-in?error=oauth')
+    if (!code) return failed()
 
-    if (!code) return c.redirect(appHome)
+    try {
+      const res = await authWorkerFetch(c.env, '/api/auth/exchange-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+      if (!res.ok) return failed()
+      const { sessionToken } = (await res.json()) as { sessionToken?: string }
+      if (!sessionToken) return failed()
 
-    const res = await authWorkerFetch(c.env, '/api/auth/exchange-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    })
-
-    if (!res.ok) return c.redirect(appHome)
-    const data = (await res.json()) as { sessionToken?: string }
-    if (!data.sessionToken) return c.redirect(appHome)
-    const sessionToken = data.sessionToken
-
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: appHome,
-        'Set-Cookie': `${SESSION_COOKIE}=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`,
-      },
-    })
+      const loopback = isHttpLoopback(url)
+      const cookieName = loopback ? LOCAL_SESSION_COOKIE : SESSION_COOKIE
+      const secure = loopback ? '' : '; Secure'
+      c.header('Set-Cookie', `${cookieName}=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly${secure}; SameSite=Lax; Max-Age=2592000`)
+      c.header('Cache-Control', 'no-store')
+      return c.redirect('/home?auth=complete')
+    } catch {
+      return failed()
+    }
   })
 
   app.all('/api/auth/sign-out', async (c) => {
     try {
       await authWorkerFetch(c.env, '/api/auth/sign-out', {
         method: c.req.method,
-        headers: c.req.raw.headers,
+        headers: authHeaders(c.req.raw),
         body: c.req.method !== 'GET' && c.req.method !== 'HEAD' ? c.req.raw.body : undefined,
       })
     } catch {
-      // Still expire the app-scoped cookie below. A network/auth-worker
-      // failure must not leave the browser immediately signed back in.
+      // Clear the app cookie even when the upstream sign-out fails.
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Set-Cookie': `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
-      },
-    })
+    c.header('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+    if (isHttpLoopback(new URL(c.req.url))) {
+      c.header('Set-Cookie', `${LOCAL_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`, { append: true })
+    }
+    return c.json({ success: true })
   })
 
   // Auth proxy → auth-worker (same-origin cookies).
@@ -154,7 +168,7 @@ export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
     const url = new URL(c.req.url)
     const res = await authWorkerFetch(c.env, url.pathname + url.search, {
       method: c.req.method,
-      headers: c.req.raw.headers,
+      headers: authHeaders(c.req.raw),
       body: c.req.method !== 'GET' && c.req.method !== 'HEAD' ? c.req.raw.body : undefined,
     })
     const headers = new Headers(res.headers)
@@ -232,6 +246,10 @@ export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
 
   app.all('/api/integrations/:name/:endpoint', async (c) => {
     const integrationName = c.req.param('name')
+    // Generation providers are worker-only so callers cannot bypass the queue limits.
+    if (['exa', 'anthropic', 'elevenlabs'].includes(integrationName.toLowerCase())) {
+      return c.json({ error: 'This integration is available only through briefing generation.' }, 403)
+    }
     // Params arrive decoded, so `..%2F..%2Fapi%2Fusers` would otherwise
     // reach another api-worker route with the owner's token. Plain
     // identifiers only, and own keys only for the config.
@@ -292,8 +310,11 @@ export function registerPlatformProxyRoutes(app: Hono<AppContext>): void {
     // A same-origin GET/HEAD with no bearer is identified by the app-origin
     // session cookie, so a private file URL renders in <img>/<audio>/<video>.
     // The fallback lives here, not in resolveAuth, which also gates writes.
+    const mediaRequest = c.req.method === 'GET' || c.req.method === 'HEAD'
+      ? new Request(c.req.raw, { headers: authHeaders(c.req.raw) })
+      : c.req.raw
     const auth =
-      (await resolveAuth(c.req.raw, c.env)) ?? (await resolveSessionReadAuth(c.req.raw, c.env))
+      (await resolveAuth(c.req.raw, c.env)) ?? (await resolveSessionReadAuth(mediaRequest, c.env))
     const userId = auth?.userId ?? null
 
     const url = new URL(c.req.url)

@@ -1,50 +1,37 @@
-/**
- * Background-job handler — invoked by AppJobRoom (worker.ts) for every
- * job picked up from the queue. Dispatch on `job.type` and return a
- * result (captured as `job.result`) or throw to fail (retried up to
- * `maxAttempts`, then permanently marked failed).
- *
- * Use this for any work that needs to outlive the HTTP response:
- *   - AI generation that exceeds Cloudflare's 30-second waitUntil window
- *   - Export / render pipelines
- *   - Bulk imports, fan-out side effects
- *
- * Enqueue from a client with the `useJobs(roomId)` hook, or from
- * worker-side code (an HTTP route, an action, a cron task) with
- * `enqueueJob(env.JOB_ROOMS, \`app:${env.DEEPSPACE_APP_ID}\`, type, payload)`.
- *
- * Long-running progress / checkpoint guidance:
- *   - `ctx.progress(0..1, msg?)` publishes a real-time update over the
- *     room's WebSocket so subscribers see progress without polling.
- *   - `ctx.continue(state, { afterMs })` yields and resumes on the next
- *     alarm with `job.resumeFrom = state` — use this for work that
- *     exceeds the 15-minute per-alarm wall-time ceiling.
- *   - `ctx.signal` is an AbortSignal that fires when a client cancels;
- *     forward it to `fetch` and check `.aborted` at loop suspension
- *     points.
- *
- * Example:
- *
- *   export async function runJob(job: Job, ctx: JobContext, env: Env) {
- *     switch (job.type) {
- *       case 'ai-summarize': {
- *         const { text } = job.payload as { text: string }
- *         ctx.progress(0.1, 'starting')
- *         const summary = await summarize(text, { signal: ctx.signal })
- *         return { summary }
- *       }
- *       default:
- *         throw new Error(`Unknown job type: ${job.type}`)
- *     }
- *   }
- */
+import { appFiles, buildCronContext, type Job, type JobContext } from 'deepspace/worker'
+import { z } from 'zod'
+import type { Env } from '../worker'
+import { interestsSchema } from './lib/interests'
+import { reportSchema, type Podcast } from './lib/briefing'
+import { generatePodcast, generateReport } from './server/briefing-pipeline'
 
-import type { Job, JobContext } from 'deepspace/worker'
+export const briefingRequest = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('report'), userId: z.string().min(1), topics: interestsSchema }),
+  z.object({ kind: z.literal('podcast'), userId: z.string().min(1), report: reportSchema }),
+])
 
-export async function runJob(
-  _job: Job,
-  _ctx: JobContext,
-  _env: unknown,
-): Promise<void> {
-  // No-op — implement your job handlers here. Dispatch on `_job.type`.
+export async function runJob(job: Job, context: JobContext, env: Env, onProgress: (message: string) => void) {
+  const payload = briefingRequest.parse(job.payload)
+  const { records, integrations } = buildCronContext(env, env.OWNER_USER_ID, `app:${env.DEEPSPACE_APP_ID}`)
+  function progress(message: string) {
+    context.signal.throwIfAborted()
+    onProgress(message)
+  }
+
+  if (payload.kind === 'report') {
+    const report = await generateReport(integrations.call, payload.topics, progress)
+    await records.update('briefings', payload.userId, { report: JSON.stringify(report) })
+    return
+  }
+
+  const { audio, ...episode } = await generatePodcast(integrations.call, payload.report, progress)
+  progress('Saving the private audio…')
+  const file = await appFiles(env, { scope: 'self', userId: payload.userId }).upload(audio, {
+    key: `briefings/${payload.report.id}.mp3`,
+    name: 'Signal briefing.mp3',
+  })
+  const podcast: Podcast = {
+    ...episode, reportId: payload.report.id, audioKey: file.key, audioPath: file.path,
+  }
+  await records.update('briefings', payload.userId, { podcast: JSON.stringify(podcast) })
 }
